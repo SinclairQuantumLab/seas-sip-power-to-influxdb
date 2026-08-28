@@ -1,309 +1,186 @@
 # seas-pump-to-influxdb
 
-`seas-pump-to-influxdb` reads the complete current state of one SAES SIP POWER
-ion-pump controller and writes each snapshot to InfluxDB for Grafana. It uses
-the controller's Ethernet UDP **Read All** command and is deliberately
-read-only: this application cannot start or stop the high-voltage output,
-clear alarms, reset the controller, or change any setting.
+Read one SAES SIP POWER ion-pump controller through its Ethernet UDP interface
+and relay each controller-wide snapshot to InfluxDB for Grafana. Device access
+is read-only: the app sends Read All but never sends a command that changes the
+controller state or settings.
 
-The supplied configuration targets the controller currently at
-`192.168.50.34`. Each sample includes electrical readings, status and alarm
-flags, switch state and thresholds, controller settings, firmware identity,
-and network information.
+## Requirements
 
-> SIP POWER operates an ion pump at hazardous high voltage. This relay does not
-> replace the installation, interlock, grounding, or safety instructions in
-> `manuals/saes-sip_power-user_manual-rev_4.pdf`. Do not manipulate the high-voltage
-> cable or grounding wire while the supply is operating.
+- A powered, Ethernet-equipped SAES SIP POWER reachable from the relay computer
+- UDP traffic to the controller's port 2527 permitted by the host and network
 
-## Quick start: first safe reading
+## Installation
 
-### Prerequisites
+1. Clone the repository and its credential submodule into the standard project
+   directory:
 
-- Windows or Linux with network reachability to the controller
-- UDP traffic to the controller's fixed port 2527 permitted by the host and
-  network firewalls
-- [uv](https://docs.astral.sh/uv/) and Python 3.11 or newer
-- An Ethernet-equipped SAES SIP POWER; the default settings use
-  `192.168.50.34:2527`
-- Access to the private
-  [`imaq-secret`](https://github.com/SinclairQuantumLab/imaq-secret.git)
-  repository for upload-enabled runs
-- InfluxDB 2.x credentials only when upload is enabled; dry-run needs none
+    ```bash
+    cd "$HOME/Projects"
+    git clone --recurse-submodules https://github.com/SinclairQuantumLab/seas-pump-to-influxdb.git
+    cd seas-pump-to-influxdb
+    ```
 
-Clone this repository with the IMAQ Lab secret submodule at the expected path:
+    > **NOTE**: the `--recurse-submodules` option clones [`imaq-secret`](https://github.com/SinclairQuantumLab/imaq-secret.git) repo for the credential to access to our InfluxDB together at the right location in this repo.
 
-```powershell
-git clone --recurse-submodules https://github.com/SinclairQuantumLab/seas-pump-to-influxdb.git
-Set-Location seas-pump-to-influxdb
-```
+    For an existing checkout cloned without submodules, run:
 
-The `--recurse-submodules` option clones the private `imaq-secret` repository
-into this checkout. If this repository was already cloned without submodules,
-recover the missing submodule with the exact command:
+    ```bash
+    git submodule update --init --recursive
+    ```
 
-```powershell
-git submodule update --init --recursive
-```
+2. Install the project dependencies:
 
-Install the project environment:
+    ```bash
+    uv sync
+    ```
 
-```powershell
-uv sync
-```
+3. Create and edit a `settings.toml` file from the
+   `settings.toml.template` template:
 
-Copy the settings template.
+    ```bash
+    cp settings.toml.template settings.toml
+    ```
 
-Windows:
+    Set `host` to the controller hostname or IP address. `port` is optional and
+    defaults to 2527. `interval_s` controls the polling interval, and
+    `timeout_s` limits one UDP response wait.
 
-```powershell
-Copy-Item settings.toml.template settings.toml
-```
+4. Optional: to register the app with Supervisor, use the appropriate template
+   in the `supervisor` folder for the operating system.
 
-Linux:
+## Usage
 
-```bash
-cp settings.toml.template settings.toml
-```
+1. Read and print one real snapshot without loading InfluxDB credentials or
+   uploading data:
 
-The template already points to `192.168.50.34`. If the controller address is
-different, edit `host` in `settings.toml`. Then request one real device
-snapshot without opening an authentication file or writing to InfluxDB:
+    ```bash
+    uv run python main.py --settings settings.toml --once --dry-run
+    ```
 
-```powershell
-uv run python main.py --once --dry-run
-```
+2. After reviewing the dry-run record, upload one snapshot:
 
-Success produces one timestamped line beginning with `Iteration 1: Dry-run
-record, not uploaded:`. The printed record must show the controller's serial
-number, `IPAddress`, and current fields. Exit code 0 means the frame was
-received, validated, normalized, and mapped to the documented InfluxDB schema.
+    ```bash
+    uv run python main.py --settings settings.toml --once
+    ```
 
-The command sends only the two-byte Read All request (`01 05`) to the configured
-unicast address. It never broadcasts and never sends a controller write or
-control command.
+    Uploads read `imaq-secret/auth.toml`. Query the new point back and verify its
+    schema and timestamp before continuous operation.
 
-## Configuration
+3. Run continuously:
 
-`settings.toml` is ignored by Git. All intervals are seconds unless the key
-states another unit.
+    ```bash
+    uv run python main.py --settings settings.toml
+    ```
 
-| Setting | Default | Meaning and valid values |
-| --- | ---: | --- |
-| `interval_s` | `30` | Positive interval between cycle start times. |
-| `host` | `192.168.50.34` | Controller IPv4 address or DNS name. |
-| `port` | `2527` | Optional UDP port. Omit it to use the SIP POWER default. |
-| `timeout_s` | `3` | Timeout for each UDP response. |
+The first polling cycle starts immediately. Later cycles use cycle-start
+deadlines, so acquisition time is subtracted from the wait. If a source
+operation fails, the relay replaces the UDP socket immediately and retries
+once. The third unresolved lifetime failure exits the process so Supervisor can
+restart it. Successful cycles do not reset that counter.
 
-The relay supports one controller per process. To collect a second controller,
-run a second checkout or service with its own settings, bucket, and log paths.
+Stop a foreground process with `Ctrl+C`. The relay closes its UDP and InfluxDB
+clients during normal shutdown and signal handling. Supervisor owns the
+continuous-process stdout and stderr logs. Startup wrappers execute the
+prepared `.venv` interpreter directly:
 
-### InfluxDB authentication
+- Windows: `Startup.ps1`
+- Linux: `Startup.sh`
 
-For Sinclair deployment, the private `imaq-secret` submodule supplies
-`imaq-secret/auth.toml` at the same fixed path used by the other Sinclair
-relays. Do not copy its values into `settings.toml`, logs, commands, or this
-repository. After the dry-run succeeds, an operator who is authorized to write
-to the configured bucket can perform exactly one upload:
+## Data written to InfluxDB
 
-```powershell
-uv run python main.py --once
-```
+Each successful Read All response becomes one point with this fixed schema:
 
-Success says `Iteration 1: Uploaded` and exits 0. Confirm the point in InfluxDB
-before enabling continuous operation.
-
-## Acquisition and recovery behavior
-
-Each cycle requests the controller's current state. The first cycle starts
-immediately. Later cycles use monotonic cycle-start deadlines: time spent
-reading and writing is subtracted from the wait, cycles never overlap, and an
-overrun schedules the next cycle from the current time.
-
-The UDP socket accepts replies only from the configured peer. A source timeout,
-socket error, malformed length, wrong protocol version, or wrong response
-command causes the relay to replace the socket immediately and retry the read
-once. Only an unresolved retry or write failure increments the lifetime failure
-count. Successful cycles do not reset that count. At three lifetime failures,
-the process exits nonzero so Supervisor can restart it.
-
-SIP POWER does not include a sample timestamp in Read All. The InfluxDB point
-therefore uses the relay host's aware UTC acquisition time immediately after a
-valid response arrives. `IOUT`, `VOUT`, and `VIN` are controller values sampled
-in the same time slice according to the manual.
-
-SIGINT and SIGTERM request a clean stop. The relay closes the UDP socket and
-InfluxDB resources on normal exit, stop, and fatal failure. Ordinary status is
-written to stdout; warnings and errors go to stderr for Supervisor capture. No
-separate local measurement log is created.
-
-## InfluxDB schema
-
-The measurement is fixed as `SAESSIPPower`.
-
-Tags:
-
-| Tag | Value |
-| --- | --- |
-| `source` | Constant `SAES SIP POWER` |
-| `Serial number` | Decimal controller serial number returned by Read All |
-
-Fields are written with the following exact names and types:
-
-| Field | Type | Meaning / unit |
+| Kind | Exact InfluxDB name | Type or value |
 | --- | --- | --- |
-| `HasEthernet` | boolean | Ethernet feature flag |
-| `HasDisplay` | boolean | Front-panel display feature flag |
-| `HardwareRevision` | string | `major.minor` hardware revision |
-| `SoftwareVersion` | string | `major.minor` firmware version |
-| `OutputCurrent[nA]` | integer | Ion-pump output current in nA |
-| `OutputVoltage[V]` | integer | Ion-pump output voltage in V |
-| `InputVoltage[V]` | float | Input voltage converted from the reported dV value |
-| `InternalTemperature[K]` | integer | Controller internal temperature in K |
-| `ArcingEvents` | integer | Arcing events since the last start or restart |
-| `TotalWorkingTime[h]` | integer | Total hours spent supplying current |
-| `Uptime[s]` | integer | Seconds since the last start or restart |
-| `Enabled` | boolean | High-voltage output enable status |
-| `NeedRestart` | boolean | Restart-required status |
-| `OutputCurrentGradient` | string | `HOLD`, `UP`, `DOWN`, or `RESERVED` |
-| `GlobalAlarm` | boolean | At least one alarm latch is set |
-| `SafeAlarm` | boolean | Safety input alarm latch |
-| `InterlockAlarm` | boolean | Interlock input alarm latch |
-| `OverTemperatureAlarm` | boolean | Internal over-temperature alarm latch |
-| `InputVoltageAlarm` | boolean | Input under/over-voltage alarm latch |
-| `OutputOverVoltageAlarm` | boolean | Output over-voltage alarm latch |
-| `OutputOverCurrentAlarm` | boolean | Output over-current alarm latch |
-| `ArcingAlarm` | boolean | Arcing alarm latch |
-| `CommunicationAlarm` | boolean | Keepalive communication alarm latch |
-| `Switch1On` | boolean | SW1 output state |
-| `Switch2On` | boolean | SW2 output state |
-| `Switch3On` | boolean | SW3 output state |
-| `OutputVoltageSetpoint[V]` | integer | Configured output-voltage set point in V |
-| `OutputVoltageRampInterval[ms]` | integer | Configured voltage ramp interval in ms |
-| `Switch1Mode` | string | `OFF`, `SIMPLE`, `WINDOW`, or `RESERVED` |
-| `Switch2Mode` | string | `OFF`, `SIMPLE`, `WINDOW`, or `RESERVED` |
-| `Switch3Mode` | string | `OFF`, `SIMPLE`, `WINDOW`, or `RESERVED` |
-| `Switch1Threshold[nA]` | integer | SW1 threshold in nA |
-| `Switch2MinThreshold[nA]` | integer | SW2 simple/minimum threshold in nA |
-| `Switch2MaxThreshold[nA]` | integer | SW2 maximum threshold in nA |
-| `Switch3MinThreshold[nA]` | integer | SW3 simple/minimum threshold in nA |
-| `Switch3MaxThreshold[nA]` | integer | SW3 maximum threshold in nA |
-| `KeepaliveInterval[ms]` | integer | Configured keepalive interval in ms; zero disables it |
-| `ConversionRate[A/Torr]` | integer | Controller conversion-rate value in A/Torr |
-| `ModbusID` | integer | Configured Modbus slave ID |
-| `IPAddress` | string | Controller IPv4 address returned by Read All |
-| `IPNetmask` | string | Controller IPv4 netmask |
-| `MACAddress` | string | Uppercase colon-separated controller MAC address |
-| `OutputPower[W]` | float | Derived simultaneously sampled `IOUT * VOUT` in W |
-| `Pressure[Torr]` | float, optional | `OutputCurrent[nA] * 1e-9 / ConversionRate[A/Torr]`; omitted when conversion rate is zero |
+| Measurement | `SAESSIPPower` | fixed |
+| Tag | `source` | `SAES SIP POWER` |
+| Tag | `Serial number` | controller serial number |
+| Field | `HasEthernet` | boolean |
+| Field | `HasDisplay` | boolean |
+| Field | `HardwareRevision` | string |
+| Field | `SoftwareVersion` | string |
+| Field | `OutputCurrent[nA]` | integer |
+| Field | `OutputVoltage[V]` | integer |
+| Field | `InputVoltage[V]` | float |
+| Field | `InternalTemperature[K]` | integer |
+| Field | `ArcingEvents` | integer |
+| Field | `TotalWorkingTime[h]` | integer |
+| Field | `Uptime[s]` | integer |
+| Field | `Enabled` | boolean |
+| Field | `NeedRestart` | boolean |
+| Field | `OutputCurrentGradient` | string |
+| Field | `GlobalAlarm` | boolean |
+| Field | `SafeAlarm` | boolean |
+| Field | `InterlockAlarm` | boolean |
+| Field | `OverTemperatureAlarm` | boolean |
+| Field | `InputVoltageAlarm` | boolean |
+| Field | `OutputOverVoltageAlarm` | boolean |
+| Field | `OutputOverCurrentAlarm` | boolean |
+| Field | `ArcingAlarm` | boolean |
+| Field | `CommunicationAlarm` | boolean |
+| Field | `Switch1On` | boolean |
+| Field | `Switch2On` | boolean |
+| Field | `Switch3On` | boolean |
+| Field | `OutputVoltageSetpoint[V]` | integer |
+| Field | `OutputVoltageRampInterval[ms]` | integer |
+| Field | `Switch1Mode` | string |
+| Field | `Switch2Mode` | string |
+| Field | `Switch3Mode` | string |
+| Field | `Switch1Threshold[nA]` | integer |
+| Field | `Switch2MinThreshold[nA]` | integer |
+| Field | `Switch2MaxThreshold[nA]` | integer |
+| Field | `Switch3MinThreshold[nA]` | integer |
+| Field | `Switch3MaxThreshold[nA]` | integer |
+| Field | `KeepaliveInterval[ms]` | integer |
+| Field | `ConversionRate[A/Torr]` | integer |
+| Field | `ModbusID` | integer |
+| Field | `IPAddress` | string |
+| Field | `IPNetmask` | string |
+| Field | `MACAddress` | string |
+| Field | `OutputPower[W]` | float |
+| Field | `Pressure[Torr]` | float, optional |
 
-The fields reflect the full non-reserved Read All response. A response with
-missing bytes is rejected rather than partially written. Do not rename fields,
-tags, or the measurement after dashboards and alerts depend on them.
-
-## Running continuously
-
-The CLI accepts the same options in every mode:
-
-```text
---settings PATH   settings file (default: settings.toml)
---once            process one snapshot and exit
---dry-run         print mapped records without loading auth or writing
-```
-
-For an interactive continuous run:
-
-```powershell
-uv run python main.py
-```
-
-Prepared service wrappers execute the existing `.venv` interpreter directly
-and never resolve dependencies during restart.
-
-Windows:
-
-```powershell
-.\Startup.ps1
-```
-
-Linux:
-
-```bash
-./Startup.sh
-```
-
-### Supervisor on Linux
-
-Copy `supervisor/linux.conf.template` to `/etc/supervisor/conf.d/` and replace
-every `USERNAME` and project path if the checkout is not under
-`/home/USERNAME/Projects/seas-pump-to-influxdb`. The template runs
-`Startup.sh`, uses the repository as its working directory, restarts only
-unexpected exits, and writes:
-
-- `/var/log/supervisor/seas-pump-to-influxdb_out.log`
-- `/var/log/supervisor/seas-pump-to-influxdb_err.log`
-
-After reviewing the paths:
-
-```bash
-sudo supervisorctl reread
-sudo supervisorctl update
-sudo supervisorctl status seas-pump-to-influxdb
-```
-
-### Supervisor on Windows
-
-Copy and adapt `supervisor/windows.conf.template` for the installed Windows
-Supervisor service. It expects the checkout at
-`%USERPROFILE%\Projects\seas-pump-to-influxdb`, runs `Startup.ps1`, restarts
-only unexpected exits, and writes rotating stdout/stderr logs under the
-Supervisor configuration directory's `logs` folder. Verify the expanded
-command, project directory, and log paths before starting the program.
+The point timestamp is the relay computer's aware UTC time immediately after a
+valid response arrives. `OutputPower[W]` is calculated from the simultaneously
+reported output current and voltage. `Pressure[Torr]` is omitted when the
+controller reports a zero conversion rate. A truncated or malformed response
+rejects the whole snapshot instead of writing a partial point.
 
 ## Troubleshooting
 
-`timed out` or `Read All failed`:
-
-- Verify `host` and that the PC has a route to the controller subnet.
-- Confirm the controller has the Ethernet option and is powered.
-- Permit outbound and return UDP traffic on port 2527 in host/network firewalls.
-- Do not test with a broadcast address; SIP POWER ignores broadcast Read All.
-- Check that another host has not changed the controller IP since settings were
-  copied.
-
-`Read All response must be exactly 302 bytes` or an unexpected version/command:
-
-- Confirm the endpoint is a SIP POWER, not another UDP service.
-- Retain the error text but do not log or commit raw datagrams.
-- Check the controller firmware against the included Rev. 4 manual before
-  changing the parser.
-
-Dry-run works but upload fails:
-
-- Run `git submodule update --init --recursive` if `imaq-secret/auth.toml` is
-  absent from an existing checkout.
-- Verify `[influxdb]` contains nonempty `url`, `token`, `org`, and `bucket`.
-- Check token write permission, organization/bucket spelling, and InfluxDB
-  network reachability.
-- Dry-run success does not validate InfluxDB credentials.
-
-One expected field is absent:
-
-- Only `Pressure[Torr]` is optional; it is omitted when the controller reports
-  a zero conversion rate.
-- A disconnected high-voltage cable may legitimately produce
-  `OutputCurrent[nA] = 0`, as noted by the vendor manual.
-- Alarm booleans are latched controller state; this read-only relay never clears
-  them.
+- If reads time out, verify `host`, the route to the controller subnet, and UDP
+  port 2527 in the host and network firewalls. Increase `timeout_s` if needed;
+  changing `interval_s` does not change request timeouts.
+- If a response has the wrong length, version, or command, confirm the endpoint
+  is a SIP POWER and check its firmware against the included Rev. 4 manual.
+- If uploads fail, run `git submodule update --init --recursive`, verify the
+  private InfluxDB configuration, and return to `--once --dry-run` to isolate
+  controller access from InfluxDB.
+- If `Pressure[Torr]` is absent, the controller reported a zero conversion
+  rate. Other fields are required.
+- If Supervisor cannot start the app, run `Startup.ps1` or `Startup.sh`
+  manually and inspect Supervisor's stderr log.
 
 ## Validation status
 
-On 2026-08-28, the completed app successfully parsed a current 302-byte
-version-1 Read All Answer from `192.168.50.34:2527` with `--once --dry-run`.
-The record reported the configured controller IP, hardware revision 2.2,
-software version 2.0, and a 24.0 V input; no authentication file was opened and
-nothing was uploaded. The repository's 18-test offline suite validates protocol
-parsing, malformed/missing frames, schema mapping, optional pressure, dry-run
-credential isolation, one reconnect and retry, cumulative failure threshold,
-cycle-start timing, and cleanup. InfluxDB upload and Supervisor deployment still
-require the operator's credentials, authorization, and selected deployment host.
+Read-only dry-run checks succeeded against the controller at
+`192.168.50.34:2527` on 2026-08-28. The app parsed a 302-byte Read All response
+for serial 25040035 and built the documented `SAESSIPPower` record without
+loading credentials or uploading data.
+
+The offline suite contains 18 passing tests covering protocol parsing,
+malformed responses, schema mapping, optional pressure, dry-run credential
+isolation, reconnect and retry, cumulative failure handling, timing, and
+cleanup. InfluxDB upload and Supervisor activation have not been validated.
+
+## Developer's note
+
+- `saes_sip_power_client.py` owns the Ethernet connection, Read All protocol,
+  response parsing, and normalized sample.
+- `main.py` owns polling, the fixed InfluxDB schema, upload, failure accounting,
+  signals, and cleanup.
+- Protocol details come from
+  `manuals/saes-sip_power-user_manual-rev_4.pdf`. The app sends only the
+  two-byte Read All request (`01 05`) to the configured unicast address; it does
+  not broadcast or send controller write commands.
