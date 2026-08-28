@@ -94,7 +94,6 @@ states another unit.
 | `interval_s` | `30` | Positive interval between cycle start times. |
 | `reconnect_delay_s` | `1` | Nonnegative delay before one socket replacement and retry. |
 | `exception_threshold` | `3` | Positive cumulative unresolved-failure limit before the process exits nonzero. |
-| `auth_path` | `imaq-secret/auth.toml` | IMAQ Lab authentication file path, resolved relative to `settings.toml`. Dry-run never opens it. |
 | `source.host` | `192.168.50.34` | Controller IPv4 address or DNS name. |
 | `source.port` | `2527` | UDP port in the range 1-65535. SIP POWER documents 2527 as hard-coded. |
 | `source.timeout_s` | `3` | Positive finite timeout for each UDP response. |
@@ -106,10 +105,10 @@ and log paths.
 ### InfluxDB authentication
 
 For Sinclair deployment, the private `imaq-secret` submodule supplies
-`imaq-secret/auth.toml` at the path selected by `auth_path`. Do not copy its
-values into `settings.toml`, logs, commands, or this repository. After the
-dry-run succeeds, an operator who is authorized to write to the configured
-bucket can perform exactly one upload:
+`imaq-secret/auth.toml` at the same fixed path used by the other Sinclair
+relays. Do not copy its values into `settings.toml`, logs, commands, or this
+repository. After the dry-run succeeds, an operator who is authorized to write
+to the configured bucket can perform exactly one upload:
 
 ```powershell
 uv run python main.py --once
@@ -285,7 +284,6 @@ command, project directory, and log paths before starting the program.
 
 Dry-run works but upload fails:
 
-- Confirm `auth_path` resolves relative to the selected settings file.
 - Run `git submodule update --init --recursive` if `imaq-secret/auth.toml` is
   absent from an existing checkout.
 - Verify `[influxdb]` contains nonempty `url`, `token`, `org`, and `bucket`.
@@ -308,9 +306,8 @@ On 2026-08-28, the completed app successfully parsed a current 302-byte
 version-1 Read All Answer from `192.168.50.34:2527` with `--once --dry-run`.
 The record reported the configured controller IP, hardware revision 2.2,
 software version 2.0, and a 24.0 V input; no authentication file was opened and
-nothing was uploaded. The repository's 29-test offline suite validates parsing,
-malformed/missing frames, configuration, schema mapping, optional pressure,
-dry-run credential isolation, one reconnect and retry, cumulative failure
-threshold, cycle-start timing, and cleanup. InfluxDB upload and Supervisor
-deployment still require the operator's credentials, authorization, and
-selected deployment host.
+nothing was uploaded. The repository's 18-test offline suite validates protocol
+parsing, malformed/missing frames, schema mapping, optional pressure, dry-run
+credential isolation, one reconnect and retry, cumulative failure threshold,
+cycle-start timing, and cleanup. InfluxDB upload and Supervisor deployment still
+require the operator's credentials, authorization, and selected deployment host.

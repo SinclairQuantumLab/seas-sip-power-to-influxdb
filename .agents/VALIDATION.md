@@ -27,7 +27,7 @@ No raw response frame was retained and no controller state was changed.
 ## Offline and structural checks - 2026-08-28
 
 - `uv sync`: passed with CPython 3.11.14; `uv.lock` retained.
-- `uv run pytest -q`: 29 passed.
+- `uv run pytest -q`: 18 passed.
 - `uv run ruff check .`: all checks passed.
 - `audit_relay.py . --strict`: all enforced findings passed; no WARN or ERROR.
 - Baseline/current AST comparison: all 45 InfluxDB field/tag-to-sample mappings
@@ -38,11 +38,13 @@ No raw response frame was retained and no controller state was changed.
   paired comment markers. The tracked `imaq-secret` gitlink uses the common
   Sinclair submodule URL; credential contents were not inspected.
 
-The suite executes `main.py` as a script and covers settings, source framing and
-every field group, truncated and wrong-header frames, timestamps, record
-mapping, optional pressure, credential isolation, the direct read/write path,
-reconnect/retry, cumulative lifetime threshold, cycle-start timing, writer
-failure, and cleanup.
+The suite executes `main.py` as a script and covers direct settings loading,
+source framing and every field group, truncated and wrong-header frames,
+timestamps, record mapping, optional pressure, credential isolation, the direct
+read/write path, reconnect/retry, cumulative lifetime threshold, cycle-start
+timing, writer failure, and cleanup. Input-value validation tests were removed
+with the validation layer; the script trusts the local deployer-controlled TOML
+in the same style as the comparable Sinclair relays.
 
 ## Not run
 

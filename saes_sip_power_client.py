@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import math
 import socket
 import struct
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from ipaddress import IPv4Address
@@ -85,7 +84,7 @@ SocketFactory = Callable[[], DatagramSocket]
 
 @dataclass(frozen=True)
 class SAESSIPPowerSettings:
-    """Hold validated network settings for one SIP POWER controller.
+    """Hold network settings for one SIP POWER controller.
 
     ``host`` may be an IPv4 address or DNS name. ``port`` is normally the
     controller's hard-coded UDP port 2527, while ``timeout_s`` bounds each read.
@@ -96,26 +95,6 @@ class SAESSIPPowerSettings:
     host: str
     port: int = DEFAULT_PORT
     timeout_s: float = 3.0
-
-    @classmethod
-    def from_mapping(cls, values: Mapping[str, object]) -> SAESSIPPowerSettings:
-        """Validate a TOML source table and return stable typed settings."""
-
-        host = values.get("host")
-        if not isinstance(host, str) or not host.strip():
-            raise ValueError("settings.source.host must be a nonempty string")
-        port = values.get("port", DEFAULT_PORT)
-        if isinstance(port, bool) or not isinstance(port, int):
-            raise TypeError("settings.source.port must be an integer")
-        if not 1 <= port <= 65535:
-            raise ValueError("settings.source.port must be between 1 and 65535")
-        timeout = values.get("timeout_s", 3.0)
-        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
-            raise TypeError("settings.source.timeout_s must be a number")
-        timeout_s = float(timeout)
-        if not math.isfinite(timeout_s) or timeout_s <= 0:
-            raise ValueError("settings.source.timeout_s must be finite and positive")
-        return cls(host=host.strip(), port=port, timeout_s=timeout_s)
 
 
 @dataclass(frozen=True)

@@ -17,9 +17,6 @@ reconnect_delay_s = 1
 # restart the app.
 exception_threshold = 3
 
-# IMAQ Lab InfluxDB credential file supplied by the private submodule.
-auth_path = "imaq-secret/auth.toml"
-
 # SAES SIP POWER Ethernet connection.
 [source]
 host = "192.168.50.34"

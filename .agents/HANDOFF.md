@@ -8,11 +8,13 @@ script with no application functions or classes: CLI parsing, configuration,
 InfluxDB setup, acquisition, record mapping, upload, recovery, and cleanup run
 sequentially from top to bottom. Only the stateful UDP protocol boundary remains
 a reusable client. The main script uses the established Sinclair paired section
-comments and uppercase IMAQ/InfluxDB configuration names. The common private
-`imaq-secret` repository is tracked as a submodule at `imaq-secret`. Dual-platform
-startup, Supervisor templates, tests, lockfile, and the operator README are
-present. Offline checks and a current real-device dry-run passed after the
-family-style alignment on 2026-08-28.
+comments and uppercase IMAQ/InfluxDB configuration names. It reads trusted local
+TOML values directly without an application validation or narrowing layer, and
+passes `AUTH["influxdb"]` directly to the InfluxDB client. The common private
+`imaq-secret` repository is tracked as a submodule at `imaq-secret`.
+Dual-platform startup, Supervisor templates, tests, lockfile, and the operator
+README are present. Offline checks and a current real-device dry-run passed
+after the simplicity refactor on 2026-08-28.
 
 ## Next action
 

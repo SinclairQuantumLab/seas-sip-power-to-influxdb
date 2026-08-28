@@ -196,24 +196,6 @@ def test_parse_read_all_response_rejects_naive_timestamp() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "values",
-    [
-        {},
-        {"host": ""},
-        {"host": "device", "port": True},
-        {"host": "device", "port": 0},
-        {"host": "device", "timeout_s": False},
-        {"host": "device", "timeout_s": float("inf")},
-    ],
-)
-def test_source_settings_reject_invalid_values(values: dict[str, object]) -> None:
-    """Reject missing identity, booleans-as-numbers, and invalid ranges."""
-
-    with pytest.raises((TypeError, ValueError)):
-        SAESSIPPowerSettings.from_mapping(values)
-
-
 def test_client_reads_documented_request_and_closes_idempotently() -> None:
     """Use the configured endpoint, parse one sample, and release the socket."""
 

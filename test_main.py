@@ -8,7 +8,6 @@ import sys
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -80,7 +79,6 @@ def write_settings(
     interval_s: float = 10,
     reconnect_delay_s: float = 2,
     exception_threshold: int = 3,
-    auth_name: str = "imaq-secret/auth.toml",
 ) -> Path:
     """Write one synthetic deployment settings file for a script test."""
 
@@ -91,7 +89,6 @@ measurement = "SAESSIPPower"
 interval_s = {interval_s}
 reconnect_delay_s = {reconnect_delay_s}
 exception_threshold = {exception_threshold}
-auth_path = "{auth_name}"
 
 [source]
 host = "192.168.50.34"
@@ -103,19 +100,18 @@ timeout_s = 3
     return settings_path
 
 
-def write_auth(tmp_path: Path, *, include_bucket: bool = True) -> Path:
+def write_auth(tmp_path: Path) -> Path:
     """Write synthetic nonsecret InfluxDB destination values."""
 
-    bucket = 'bucket = "devices"' if include_bucket else ""
     auth_path = tmp_path / "imaq-secret" / "auth.toml"
     auth_path.parent.mkdir()
     auth_path.write_text(
-        f"""
+        """
 [influxdb]
 url = "http://influxdb.example:8086"
 token = "<SYNTHETIC_TEST_TOKEN>"
 org = "lab"
-{bucket}
+bucket = "devices"
 """.strip(),
         encoding="utf-8",
     )
@@ -336,6 +332,7 @@ def test_direct_script_maps_complete_schema(
 
     settings_path = write_settings(tmp_path)
     write_auth(tmp_path)
+    monkeypatch.chdir(tmp_path)
     source_client = FakeClient([sample()])
     write_api = FakeWriteAPI()
     created: list[FakeInfluxClient] = []
@@ -363,6 +360,7 @@ def test_direct_script_maps_complete_schema(
         "url": "http://influxdb.example:8086",
         "token": "<SYNTHETIC_TEST_TOKEN>",
         "org": "lab",
+        "bucket": "devices",
     }
     assert record["measurement"] == "SAESSIPPower"
     assert record["tags"] == {
@@ -401,29 +399,10 @@ def test_direct_script_omits_unavailable_optional_pressure(
     assert "Pressure[Torr]" not in fields
 
 
-def test_direct_script_rejects_naive_timestamp(
+def test_direct_script_loads_settings(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Reject timestamps that cannot unambiguously identify an instant."""
-
-    settings_path = write_settings(tmp_path)
-    naive = replace(sample(), observed_at=datetime(2026, 8, 28, 12, 0))
-    source_client = FakeClient([naive])
-    use_fake_source(monkeypatch, source_client)
-
-    exit_code, _namespace = run_script(
-        monkeypatch,
-        ["--settings", str(settings_path), "--once", "--dry-run"],
-    )
-
-    assert exit_code == 1
-    assert source_client.close_count == 1
-
-
-def test_settings_are_narrowed_and_relative_auth_is_resolved(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Construct the source from validated settings without opening auth."""
+    """Load the local settings directly and construct the source client."""
 
     settings_path = write_settings(tmp_path, interval_s=30, reconnect_delay_s=1)
     captured = use_fake_source(monkeypatch, FakeClient([sample()]))
@@ -435,69 +414,8 @@ def test_settings_are_narrowed_and_relative_auth_is_resolved(
 
     assert exit_code == 0
     assert captured == [SAESSIPPowerSettings("192.168.50.34", 2527, 3.0)]
-    assert namespace["AUTH_PATH"] == (
-        tmp_path / "imaq-secret" / "auth.toml"
-    ).resolve()
-    assert namespace["INTERVAL_s"] == 30.0
-    assert namespace["RECONNECT_DELAY_s"] == 1.0
-
-
-@pytest.mark.parametrize(
-    ("key", "value"),
-    [
-        ("interval_s", "true"),
-        ("reconnect_delay_s", "-1"),
-        ("exception_threshold", "0"),
-    ],
-)
-def test_direct_script_rejects_invalid_collector_numbers(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    key: str,
-    value: str,
-) -> None:
-    """Reject booleans-as-numbers, negative delays, and invalid thresholds."""
-
-    values = {
-        "interval_s": "30",
-        "reconnect_delay_s": "1",
-        "exception_threshold": "3",
-    }
-    values[key] = value
-    settings_path = tmp_path / "settings.toml"
-    settings_path.write_text(
-        f"""
-measurement = "test"
-interval_s = {values['interval_s']}
-reconnect_delay_s = {values['reconnect_delay_s']}
-exception_threshold = {values['exception_threshold']}
-[source]
-host = "controller"
-""".strip(),
-        encoding="utf-8",
-    )
-
-    exit_code, _namespace = run_script(
-        monkeypatch,
-        ["--settings", str(settings_path), "--once", "--dry-run"],
-    )
-
-    assert exit_code == 2
-
-
-def test_direct_script_requires_complete_influx_destination(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Reject an auth table missing a required destination value."""
-
-    settings_path = write_settings(tmp_path)
-    write_auth(tmp_path, include_bucket=False)
-
-    exit_code, _namespace = run_script(
-        monkeypatch, ["--settings", str(settings_path), "--once"]
-    )
-
-    assert exit_code == 2
+    assert namespace["INTERVAL_s"] == 30
+    assert namespace["RECONNECT_DELAY_s"] == 1
 
 
 def test_dry_run_skips_auth_and_influx_client(
@@ -507,7 +425,7 @@ def test_dry_run_skips_auth_and_influx_client(
 ) -> None:
     """Read the source path without opening credentials or InfluxDB."""
 
-    settings_path = write_settings(tmp_path, auth_name="missing-auth.toml")
+    settings_path = write_settings(tmp_path)
     client = FakeClient([sample()])
     use_fake_source(monkeypatch, client)
 
@@ -645,6 +563,7 @@ def test_write_failure_exits_nonzero_and_closes_every_resource(
 
     settings_path = write_settings(tmp_path)
     write_auth(tmp_path)
+    monkeypatch.chdir(tmp_path)
     source_client = FakeClient([sample()])
     write_api = FakeWriteAPI(fail=True)
     created: list[FakeInfluxClient] = []
