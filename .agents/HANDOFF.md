@@ -3,10 +3,12 @@
 ## Current state
 
 The repository contains a completed read-only, synchronous snapshot relay for
-one SAES SIP POWER over Ethernet UDP. The parser, full InfluxDB record mapping,
-settings, retry and lifetime-failure behavior, cleanup, dual-platform startup,
-Supervisor templates, tests, lockfile, and self-contained operator README are
-present. Offline checks and one current real-device dry-run passed on 2026-08-28.
+one SAES SIP POWER over Ethernet UDP. `main.py` is a direct sequential polling
+program; only the stateful UDP protocol boundary remains a reusable client.
+The parser, full InfluxDB record mapping, settings, retry and lifetime-failure
+behavior, cleanup, dual-platform startup, Supervisor templates, tests, lockfile,
+and self-contained operator README are present. Offline checks and a current
+real-device dry-run passed after the refactor on 2026-08-28.
 
 ## Next action
 

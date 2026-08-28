@@ -296,7 +296,7 @@ On 2026-08-28, the completed app successfully parsed a current 302-byte
 version-1 Read All Answer from `192.168.50.34:2527` with `--once --dry-run`.
 The record reported the configured controller IP, hardware revision 2.2,
 software version 2.0, and a 24.0 V input; no authentication file was opened and
-nothing was uploaded. The repository's 27-test offline suite validates parsing,
+nothing was uploaded. The repository's 29-test offline suite validates parsing,
 malformed/missing frames, configuration, schema mapping, optional pressure,
 dry-run credential isolation, one reconnect and retry, cumulative failure
 threshold, cycle-start timing, and cleanup. InfluxDB upload and Supervisor

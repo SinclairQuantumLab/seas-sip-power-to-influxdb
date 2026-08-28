@@ -8,7 +8,7 @@ Environment: Windows host on the controller LAN, endpoint
 1. A PowerShell UDP transport probe sent one documented read-only Read All
    header with a 3-second receive timeout. Result: response peer
    `192.168.50.34:2527`, length 302, version 1, command 128.
-2. The finished application ran:
+2. The finished sequential application ran after the orchestration refactor:
 
    ```text
    uv run python main.py --settings settings.toml.template --once --dry-run
@@ -25,14 +25,16 @@ No raw response frame was retained and no controller state was changed.
 ## Offline and structural checks - 2026-08-28
 
 - `uv sync`: passed with CPython 3.11.14; `uv.lock` retained.
-- `uv run pytest -q`: 27 passed.
+- `uv run pytest -q`: 29 passed.
 - `uv run ruff check .`: all checks passed.
 - `audit_relay.py . --strict`: all enforced findings passed; no WARN or ERROR.
+- Baseline/current AST comparison: settings loading, InfluxDB configuration,
+  record schema mapping, and CLI parser functions were identical.
 
 The suite covers settings, source framing and every field group, truncated and
 wrong-header frames, timestamps, record mapping, optional pressure, credential
-isolation, reconnect/retry, cumulative lifetime threshold, cycle-start timing,
-writer failure, and cleanup.
+isolation, the sequential read/write path, reconnect/retry, cumulative lifetime
+threshold, cycle-start timing, writer failure, and cleanup.
 
 ## Not run
 

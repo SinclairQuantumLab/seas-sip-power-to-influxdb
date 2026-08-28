@@ -401,11 +401,6 @@ class SAESSIPPowerClient:
             ) from error
         return parse_read_all_response(response)
 
-    def read_samples(self) -> list[SourceSample]:
-        """Return the one configured controller sample as a cycle list."""
-
-        return [self.read_sample()]
-
     def close(self) -> None:
         """Release the owned socket idempotently."""
 

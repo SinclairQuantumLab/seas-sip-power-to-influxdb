@@ -8,14 +8,13 @@ import signal
 import threading
 import time
 import tomllib
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import FrameType
-from typing import Protocol
 
 import influxdb_client
-from influxdb_client.client.write_api import SYNCHRONOUS
+from influxdb_client.client.write_api import SYNCHRONOUS, WriteApi
 
 from saes_sip_power_client import (
     SAESSIPPowerClient,
@@ -57,80 +56,6 @@ class InfluxConfig:
     client_options: dict[str, str]
     org: str
     bucket: str
-
-
-class SourceClient(Protocol):
-    """Define the single-source lifecycle used by the snapshot collector.
-
-    Implementations connect on demand, return one or more normalized samples,
-    replace stale communication state on ``reconnect``, and release resources
-    idempotently. Calls are synchronous and the collector never invokes them
-    concurrently.
-    """
-
-    @property
-    def is_connected(self) -> bool:
-        """Report whether a source resource is currently owned."""
-
-        ...
-
-    def connect(self) -> None:
-        """Prepare source communication."""
-
-        ...
-
-    def reconnect(self) -> None:
-        """Replace stale source communication state."""
-
-        ...
-
-    def read_samples(self) -> list[SourceSample]:
-        """Read one current snapshot cycle."""
-
-        ...
-
-    def close(self) -> None:
-        """Release source resources idempotently."""
-
-        ...
-
-
-class RecordWriter(Protocol):
-    """Define the synchronous record-write and cleanup boundary.
-
-    Implementations own any InfluxDB resources they create. ``write`` returns
-    whether records were uploaded, allowing dry-run to share collector logic,
-    and ``close`` must be idempotent.
-    """
-
-    def write(self, records: Sequence[Mapping[str, object]]) -> bool:
-        """Write one complete cycle and report whether it was uploaded."""
-
-        ...
-
-    def close(self) -> None:
-        """Release writer-owned resources idempotently."""
-
-        ...
-
-
-class StopEvent(Protocol):
-    """Describe the shutdown event boundary used by the polling scheduler.
-
-    Implementations expose synchronous state inspection and a timed wait. The
-    collector owns neither event creation nor signal registration and may reuse
-    one event for its entire single-threaded lifecycle.
-    """
-
-    def is_set(self) -> bool:
-        """Report whether shutdown was requested."""
-
-        ...
-
-    def wait(self, timeout: float | None = None) -> bool:
-        """Wait up to a timeout and report whether the event became set."""
-
-        ...
 
 
 def _number(values: Mapping[str, object], key: str, *, positive: bool) -> float:
@@ -263,180 +188,6 @@ def build_influx_record(sample: SourceSample, *, measurement: str) -> InfluxReco
     }
 
 
-class InfluxDBWriter:
-    """Synchronously write complete cycles through one InfluxDB client.
-
-    The writer owns the client and synchronous write API created from ``config``.
-    A successful ``write`` means the API call returned without an exception;
-    errors propagate to collector failure accounting. ``close`` is idempotent
-    and releases both write API and client resources. Calls are blocking and
-    concurrent use is unsupported.
-
-    Args:
-        config: Validated client options, organization, and bucket.
-    """
-
-    def __init__(self, config: InfluxConfig) -> None:
-        """Create the owned client and synchronous write API."""
-
-        self._client = influxdb_client.InfluxDBClient(**config.client_options)
-        self._write_api = self._client.write_api(write_options=SYNCHRONOUS)
-        self.org = config.org
-        self.bucket = config.bucket
-        self._closed = False
-
-    def write(self, records: Sequence[Mapping[str, object]]) -> bool:
-        """Upload one complete record sequence or propagate the write error."""
-
-        self._write_api.write(bucket=self.bucket, org=self.org, record=list(records))
-        return True
-
-    def close(self) -> None:
-        """Close the owned write API and InfluxDB client idempotently."""
-
-        if self._closed:
-            return
-        self._closed = True
-        try:
-            self._write_api.close()
-        finally:
-            self._client.close()
-
-
-class DryRunWriter:
-    """Exercise record construction without credentials or network writes.
-
-    The writer owns no external resource. ``write`` deliberately returns false
-    so collector output identifies the records as dry-run data, and ``close`` is
-    an idempotent no-op.
-    """
-
-    def write(self, records: Sequence[Mapping[str, object]]) -> bool:
-        """Accept validated records while reporting that no upload occurred."""
-
-        return False
-
-    def close(self) -> None:
-        """Complete cleanup without touching an external resource."""
-
-        return None
-
-
-class SnapshotCollector:
-    """Schedule snapshot reads, recovery, mapping, writes, and cleanup.
-
-    The collector owns the supplied source client and writer for its full
-    lifecycle. It prevents overlapping cycles, reconnects and retries one failed
-    source read locally, and counts only unresolved cycle failures against a
-    lifetime threshold that success never resets. ``run`` closes both resources
-    on normal return, stop signals, and fatal exceptions. One collector is meant
-    for one thread; callers must not invoke cycles concurrently.
-
-    Args:
-        settings: Validated scheduling, recovery, source, and credential settings.
-        client: Connected-on-demand source adapter owned by this collector.
-        writer: Upload or dry-run writer owned by this collector.
-        sleep: Injectable reconnect delay function.
-        monotonic: Injectable monotonic cycle clock.
-    """
-
-    def __init__(
-        self,
-        settings: AppSettings,
-        client: SourceClient,
-        writer: RecordWriter,
-        *,
-        sleep: Callable[[float], None] = time.sleep,
-        monotonic: Callable[[], float] = time.monotonic,
-    ) -> None:
-        """Store owned collaborators and initialize lifetime failure state."""
-
-        self.settings = settings
-        self.client = client
-        self.writer = writer
-        self.sleep = sleep
-        self.monotonic = monotonic
-        self.lifetime_exception_count = 0
-
-    def _read_with_recovery(self) -> list[SourceSample]:
-        """Read samples, replacing the connection before one local retry."""
-
-        try:
-            if not self.client.is_connected:
-                self.client.connect()
-            return self.client.read_samples()
-        except Exception as first_error:
-            log_warn(
-                "Source read failed; reconnecting before one retry: "
-                f"{type(first_error).__name__}: {first_error}"
-            )
-        if self.settings.reconnect_delay_s:
-            self.sleep(self.settings.reconnect_delay_s)
-        self.client.reconnect()
-        return self.client.read_samples()
-
-    def poll_once(self, iteration: int) -> list[InfluxRecord]:
-        """Read, map, and write one non-overlapping snapshot cycle."""
-
-        samples = self._read_with_recovery()
-        if not samples:
-            raise EmptySampleError("source returned no samples")
-        records = [
-            build_influx_record(sample, measurement=self.settings.measurement)
-            for sample in samples
-        ]
-        uploaded = self.writer.write(records)
-        verb = "Uploaded" if uploaded else "Dry-run record, not uploaded:"
-        log(f"Iteration {iteration}: {verb} {records!r}")
-        return records
-
-    def run_cycle(self, iteration: int) -> bool:
-        """Run one recoverable cycle and enforce the lifetime threshold."""
-
-        try:
-            self.poll_once(iteration)
-            return True
-        except Exception as error:
-            self.lifetime_exception_count += 1
-            count = self.lifetime_exception_count
-            threshold = self.settings.exception_threshold
-            log_error(
-                f"Iteration {iteration} failed ({count}/{threshold} lifetime): "
-                f"{type(error).__name__}: {error}"
-            )
-            if count >= threshold:
-                raise
-            return False
-
-    def run(self, *, once: bool, stop_event: StopEvent) -> None:
-        """Run once or on monotonic cycle-start deadlines until stopped."""
-
-        try:
-            if once:
-                self.poll_once(1)
-                return
-            next_poll = self.monotonic()
-            iteration = 1
-            while not stop_event.is_set():
-                self.run_cycle(iteration)
-                iteration += 1
-                next_poll += self.settings.interval_s
-                now = self.monotonic()
-                if next_poll <= now:
-                    next_poll = now + self.settings.interval_s
-                stop_event.wait(next_poll - now)
-        finally:
-            self.close()
-
-    def close(self) -> None:
-        """Close the source client and writer even if source cleanup fails."""
-
-        try:
-            self.client.close()
-        finally:
-            self.writer.close()
-
-
 def build_parser() -> argparse.ArgumentParser:
     """Build the stable command-line interface for the relay."""
 
@@ -448,38 +199,118 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the relay and translate configuration or runtime failures to exits."""
+    """Run the sequential snapshot loop and translate failures to exit codes."""
 
     args = build_parser().parse_args(argv)
+
+    # Dry-run stops at the real source boundary and deliberately never opens auth.
     try:
         settings = load_settings(args.settings)
-        writer: RecordWriter = (
-            DryRunWriter()
-            if args.dry_run
-            else InfluxDBWriter(load_influx_config(settings.auth_path))
+        influx_config = (
+            None if args.dry_run else load_influx_config(settings.auth_path)
         )
     except (OSError, TypeError, ValueError, tomllib.TOMLDecodeError) as error:
         log_error(f"Configuration error: {type(error).__name__}: {error}")
         return 2
 
-    client = SAESSIPPowerClient(settings.source)
-    collector = SnapshotCollector(settings, client, writer)
     stop_event = threading.Event()
 
     def request_stop(_signum: int, _frame: FrameType | None) -> None:
-        """Translate SIGINT or SIGTERM into a graceful collector stop."""
+        """Translate SIGINT or SIGTERM into a graceful loop stop."""
 
         stop_event.set()
 
     for signal_number in (signal.SIGINT, signal.SIGTERM):
         signal.signal(signal_number, request_stop)
+
+    source_client = SAESSIPPowerClient(settings.source)
+    influx_client: influxdb_client.InfluxDBClient | None = None
+    write_api: WriteApi | None = None
+
     try:
-        collector.run(once=args.once, stop_event=stop_event)
+        if influx_config is not None:
+            influx_client = influxdb_client.InfluxDBClient(
+                **influx_config.client_options
+            )
+            write_api = influx_client.write_api(write_options=SYNCHRONOUS)
+
+        lifetime_exception_count = 0
+        iteration = 1
+        next_poll = time.monotonic()
+
+        while not stop_event.is_set():
+            try:
+                # One source failure gets one fresh socket and one local retry.
+                try:
+                    if not source_client.is_connected:
+                        source_client.connect()
+                    sample = source_client.read_sample()
+                except Exception as first_error:
+                    log_warn(
+                        "Source read failed; reconnecting before one retry: "
+                        f"{type(first_error).__name__}: {first_error}"
+                    )
+                    if settings.reconnect_delay_s:
+                        time.sleep(settings.reconnect_delay_s)
+                    source_client.reconnect()
+                    sample = source_client.read_sample()
+
+                record = build_influx_record(
+                    sample, measurement=settings.measurement
+                )
+                records = [record]
+
+                if write_api is None:
+                    uploaded = False
+                else:
+                    write_api.write(
+                        bucket=influx_config.bucket,
+                        org=influx_config.org,
+                        record=records,
+                    )
+                    uploaded = True
+
+                verb = "Uploaded" if uploaded else "Dry-run record, not uploaded:"
+                log(f"Iteration {iteration}: {verb} {records!r}")
+            except Exception as error:
+                # A one-shot command has no later cycle in which to recover.
+                if args.once:
+                    raise
+                lifetime_exception_count += 1
+                log_error(
+                    f"Iteration {iteration} failed "
+                    f"({lifetime_exception_count}/{settings.exception_threshold} "
+                    f"lifetime): {type(error).__name__}: {error}"
+                )
+                if lifetime_exception_count >= settings.exception_threshold:
+                    raise
+
+            if args.once:
+                break
+
+            # Schedule from cycle-start deadlines; work time reduces the wait.
+            iteration += 1
+            next_poll += settings.interval_s
+            now = time.monotonic()
+            if next_poll <= now:
+                next_poll = now + settings.interval_s
+            stop_event.wait(next_poll - now)
     except KeyboardInterrupt:
         return 130
     except Exception as error:
         log_error(f"Fatal collector error: {type(error).__name__}: {error}")
         return 1
+    finally:
+        try:
+            source_client.close()
+        finally:
+            try:
+                if write_api is not None:
+                    write_api.close()
+            finally:
+                if influx_client is not None:
+                    influx_client.close()
+
     return 0
 
 
