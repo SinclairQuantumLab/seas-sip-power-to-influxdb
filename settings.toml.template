@@ -1,0 +1,11 @@
+# Copy this file to settings.toml before running the relay.
+measurement = "SAESSIPPower"
+interval_s = 30
+reconnect_delay_s = 1
+exception_threshold = 3
+auth_path = "auth.toml"
+
+[source]
+host = "192.168.50.34"
+port = 2527
+timeout_s = 3
