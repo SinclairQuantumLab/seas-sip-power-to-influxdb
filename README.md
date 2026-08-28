@@ -13,7 +13,7 @@ and network information.
 
 > SIP POWER operates an ion pump at hazardous high voltage. This relay does not
 > replace the installation, interlock, grounding, or safety instructions in
-> `saes-sip_power-user_manual-rev_4.pdf`. Do not manipulate the high-voltage
+> `manuals/saes-sip_power-user_manual-rev_4.pdf`. Do not manipulate the high-voltage
 > cable or grounding wire while the supply is operating.
 
 ## Quick start: first safe reading
