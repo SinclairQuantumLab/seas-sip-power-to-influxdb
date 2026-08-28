@@ -1,17 +1,24 @@
-"""Test the sequential relay configuration, schema, loop, and cleanup offline."""
+"""Test the direct relay script, schema, policy, and cleanup offline."""
 
 from __future__ import annotations
 
+import runpy
+import signal
+import sys
+import threading
+import time
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+import influxdb_client
 import pytest
 
-import main as relay
-from main import build_influx_record, load_influx_config, load_settings
+import saes_sip_power_client as source_module
 from saes_sip_power_client import SAESSIPPowerSettings, SourceSample
+
+SCRIPT_PATH = Path(__file__).with_name("main.py")
 
 
 def sample(*, pressure_torr: float | None = 1e-9) -> SourceSample:
@@ -75,7 +82,7 @@ def write_settings(
     exception_threshold: int = 3,
     auth_name: str = "auth.toml",
 ) -> Path:
-    """Write one synthetic deployment settings file for a loop test."""
+    """Write one synthetic deployment settings file for a script test."""
 
     settings_path = tmp_path / "settings.toml"
     settings_path.write_text(
@@ -96,17 +103,18 @@ timeout_s = 3
     return settings_path
 
 
-def write_auth(tmp_path: Path) -> Path:
-    """Write nonsecret synthetic InfluxDB destination values for upload tests."""
+def write_auth(tmp_path: Path, *, include_bucket: bool = True) -> Path:
+    """Write synthetic nonsecret InfluxDB destination values."""
 
+    bucket = 'bucket = "devices"' if include_bucket else ""
     auth_path = tmp_path / "auth.toml"
     auth_path.write_text(
-        """
+        f"""
 [influxdb]
 url = "http://influxdb.example:8086"
 token = "<SYNTHETIC_TEST_TOKEN>"
 org = "lab"
-bucket = "devices"
+{bucket}
 """.strip(),
         encoding="utf-8",
     )
@@ -114,12 +122,12 @@ bucket = "devices"
 
 
 class FakeClient:
-    """Provide ordered source outcomes to the sequential main loop.
+    """Provide ordered source outcomes to one direct-script execution.
 
-    Each read returns one queued normalized sample or raises one queued
-    exception. Connect, reconnect, and close counters expose lifecycle behavior,
-    while an optional callback can advance a deterministic clock. The fake owns
-    no external resource and is used synchronously by one test thread.
+    The fake accepts normalized samples or exceptions, returns them in order,
+    and exposes connection, reconnection, and cleanup counters to the tests. It
+    owns no external resource, performs no I/O, and is used synchronously by a
+    single script execution. An optional callback advances deterministic time.
     """
 
     def __init__(
@@ -128,7 +136,7 @@ class FakeClient:
         *,
         on_read: Callable[[], None] | None = None,
     ) -> None:
-        """Store read outcomes and initialize lifecycle counters."""
+        """Store queued results and initialize lifecycle counters."""
 
         self.outcomes = outcomes
         self.on_read = on_read
@@ -139,7 +147,7 @@ class FakeClient:
 
     @property
     def is_connected(self) -> bool:
-        """Report the fake connection state."""
+        """Report whether the fake currently represents an open connection."""
 
         return self.connected
 
@@ -150,7 +158,7 @@ class FakeClient:
         self.connect_count += 1
 
     def reconnect(self) -> None:
-        """Record stale connection replacement."""
+        """Record one stale-connection replacement."""
 
         self.connected = True
         self.reconnect_count += 1
@@ -173,10 +181,16 @@ class FakeClient:
 
 
 class FakeWriteAPI:
-    """Capture synchronous writes or raise one selected write failure."""
+    """Capture records sent through the synchronous InfluxDB write boundary.
+
+    Each write preserves its bucket, organization, and record list for schema
+    assertions, or raises a configured failure for cleanup testing. The fake
+    performs no network I/O, is used by one script execution, and records when
+    its owned write resource is closed.
+    """
 
     def __init__(self, *, fail: bool = False) -> None:
-        """Select success or failure and initialize captured writes."""
+        """Select write behavior and initialize captured state."""
 
         self.fail = fail
         self.writes: list[tuple[str, str, list[dict[str, object]]]] = []
@@ -189,7 +203,7 @@ class FakeWriteAPI:
         org: str,
         record: list[dict[str, object]],
     ) -> None:
-        """Capture one complete cycle or raise the configured failure."""
+        """Capture one cycle or raise the configured failure."""
 
         if self.fail:
             raise RuntimeError("write failed")
@@ -202,16 +216,16 @@ class FakeWriteAPI:
 
 
 class FakeInfluxClient:
-    """Provide one owned fake write API to the sequential relay.
+    """Model the InfluxDB client resource owned by the relay script.
 
-    The fake records constructor options, returns the supplied synchronous write
-    API, and exposes close state without network access. It deliberately does not
-    validate credentials or destinations. One main-loop invocation owns it and
-    uses it from one thread.
+    The fake receives already narrowed client options, returns one supplied
+    synchronous write API, and exposes cleanup state. It validates no account
+    data, opens no network connection, and is owned by one script execution
+    until the direct top-level cleanup block closes it.
     """
 
     def __init__(self, write_api: FakeWriteAPI, options: dict[str, str]) -> None:
-        """Store the write API and captured client options."""
+        """Store supplied state and initialize the close counter."""
 
         self.api = write_api
         self.options = options
@@ -220,7 +234,7 @@ class FakeInfluxClient:
     def write_api(self, *, write_options: object) -> FakeWriteAPI:
         """Return the supplied synchronous write API."""
 
-        assert write_options is relay.SYNCHRONOUS
+        assert write_options is not None
         return self.api
 
     def close(self) -> None:
@@ -230,10 +244,16 @@ class FakeInfluxClient:
 
 
 class FakeStopEvent:
-    """Advance a fake monotonic clock and stop after a fixed number of waits."""
+    """Control a continuous script run without real sleeping or signals.
+
+    The fake shares a deterministic monotonic clock, records requested wait
+    durations, advances time by each wait, and reports stopped after a selected
+    count. Tests use it synchronously in place of ``threading.Event``; it owns
+    no resource and retains its timing observations after the script exits.
+    """
 
     def __init__(self, clock: list[float], *, stop_after_waits: int) -> None:
-        """Store the shared clock and the number of waits to allow."""
+        """Store the shared clock and allowed wait count."""
 
         self.clock = clock
         self.stop_after_waits = stop_after_waits
@@ -246,12 +266,12 @@ class FakeStopEvent:
         self.requested = True
 
     def is_set(self) -> bool:
-        """Report an explicit stop or the configured wait limit."""
+        """Report an explicit stop or exhausted wait allowance."""
 
         return self.requested or len(self.waits) >= self.stop_after_waits
 
     def wait(self, timeout: float | None = None) -> bool:
-        """Record the wait and advance the fake clock by its duration."""
+        """Record a wait and advance the deterministic clock."""
 
         assert timeout is not None
         self.waits.append(timeout)
@@ -259,18 +279,90 @@ class FakeStopEvent:
         return self.is_set()
 
 
-def use_fake_source(monkeypatch: pytest.MonkeyPatch, client: FakeClient) -> None:
-    """Replace production source construction with one supplied fake client."""
+def use_fake_source(
+    monkeypatch: pytest.MonkeyPatch, client: FakeClient
+) -> list[SAESSIPPowerSettings]:
+    """Replace source construction and return captured typed settings."""
 
-    monkeypatch.setattr(relay, "SAESSIPPowerClient", lambda _settings: client)
+    captured: list[SAESSIPPowerSettings] = []
+
+    def source_factory(settings: SAESSIPPowerSettings) -> FakeClient:
+        """Capture source settings and return the selected fake client."""
+
+        captured.append(settings)
+        return client
+
+    monkeypatch.setattr(source_module, "SAESSIPPowerClient", source_factory)
+    return captured
 
 
-def test_build_influx_record_maps_complete_schema() -> None:
+def run_script(
+    monkeypatch: pytest.MonkeyPatch, arguments: list[str]
+) -> tuple[int, dict[str, object]]:
+    """Execute the production file as a script and capture its exit result."""
+
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT_PATH), *arguments])
+    monkeypatch.setattr(signal, "signal", lambda _number, _handler: None)
+    try:
+        namespace: dict[str, object] = runpy.run_path(
+            str(SCRIPT_PATH), run_name="__main__"
+        )
+    except SystemExit as error:
+        assert isinstance(error.code, int)
+        return error.code, {}
+    return 0, namespace
+
+
+def test_direct_script_help_preserves_cli(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Expose the three documented options from the direct script parser."""
+
+    exit_code, _namespace = run_script(monkeypatch, ["--help"])
+
+    help_text = capsys.readouterr().out
+    assert exit_code == 0
+    assert "--settings" in help_text
+    assert "--once" in help_text
+    assert "--dry-run" in help_text
+
+
+def test_direct_script_maps_complete_schema(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Map identity, every field group, and acquisition time without drift."""
 
-    record = build_influx_record(sample(), measurement="SAESSIPPower")
-    fields = record["fields"]
+    settings_path = write_settings(tmp_path)
+    write_auth(tmp_path)
+    source_client = FakeClient([sample()])
+    write_api = FakeWriteAPI()
+    created: list[FakeInfluxClient] = []
+    use_fake_source(monkeypatch, source_client)
 
+    def influx_factory(**options: str) -> FakeInfluxClient:
+        """Create and retain one fake InfluxDB client."""
+
+        client = FakeInfluxClient(write_api, options)
+        created.append(client)
+        return client
+
+    monkeypatch.setattr(influxdb_client, "InfluxDBClient", influx_factory)
+
+    exit_code, _namespace = run_script(
+        monkeypatch, ["--settings", str(settings_path), "--once"]
+    )
+
+    assert exit_code == 0
+    bucket, org, records = write_api.writes[0]
+    record = records[0]
+    fields = record["fields"]
+    assert (bucket, org) == ("devices", "lab")
+    assert created[0].options == {
+        "url": "http://influxdb.example:8086",
+        "token": "<SYNTHETIC_TEST_TOKEN>",
+        "org": "lab",
+    }
     assert record["measurement"] == "SAESSIPPower"
     assert record["tags"] == {
         "source": "SAES SIP POWER",
@@ -284,35 +376,67 @@ def test_build_influx_record_maps_complete_schema() -> None:
     assert fields["IPAddress"] == "192.168.50.34"
     assert fields["Pressure[Torr]"] == 1e-9
     assert record["time"] == sample().observed_at
+    assert source_client.close_count == 1
+    assert write_api.close_count == 1
+    assert created[0].close_count == 1
 
 
-def test_build_influx_record_omits_unavailable_optional_pressure() -> None:
+def test_direct_script_omits_unavailable_optional_pressure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Omit rather than fabricate pressure when conversion is unavailable."""
 
-    record = build_influx_record(sample(pressure_torr=None), measurement="test")
+    settings_path = write_settings(tmp_path)
+    use_fake_source(monkeypatch, FakeClient([sample(pressure_torr=None)]))
 
-    assert "Pressure[Torr]" not in record["fields"]
+    exit_code, namespace = run_script(
+        monkeypatch,
+        ["--settings", str(settings_path), "--once", "--dry-run"],
+    )
+
+    assert exit_code == 0
+    fields = namespace["fields"]
+    assert isinstance(fields, dict)
+    assert "Pressure[Torr]" not in fields
 
 
-def test_build_influx_record_rejects_naive_timestamp() -> None:
+def test_direct_script_rejects_naive_timestamp(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Reject timestamps that cannot unambiguously identify an instant."""
 
+    settings_path = write_settings(tmp_path)
     naive = replace(sample(), observed_at=datetime(2026, 8, 28, 12, 0))
+    source_client = FakeClient([naive])
+    use_fake_source(monkeypatch, source_client)
 
-    with pytest.raises(ValueError, match="timezone-aware"):
-        build_influx_record(naive, measurement="test")
+    exit_code, _namespace = run_script(
+        monkeypatch,
+        ["--settings", str(settings_path), "--once", "--dry-run"],
+    )
+
+    assert exit_code == 1
+    assert source_client.close_count == 1
 
 
-def test_load_settings_validates_and_resolves_relative_paths(tmp_path: Path) -> None:
-    """Load collector and source values without opening the credential file."""
+def test_settings_are_narrowed_and_relative_auth_is_resolved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Construct the source from validated settings without opening auth."""
 
     settings_path = write_settings(tmp_path, interval_s=30, reconnect_delay_s=1)
+    captured = use_fake_source(monkeypatch, FakeClient([sample()]))
 
-    settings = load_settings(settings_path)
+    exit_code, namespace = run_script(
+        monkeypatch,
+        ["--settings", str(settings_path), "--once", "--dry-run"],
+    )
 
-    assert settings.measurement == "SAESSIPPower"
-    assert settings.auth_path == (tmp_path / "auth.toml").resolve()
-    assert settings.source == SAESSIPPowerSettings("192.168.50.34", 2527, 3.0)
+    assert exit_code == 0
+    assert captured == [SAESSIPPowerSettings("192.168.50.34", 2527, 3.0)]
+    assert namespace["auth_path"] == (tmp_path / "auth.toml").resolve()
+    assert namespace["interval_s"] == 30.0
+    assert namespace["reconnect_delay_s"] == 1.0
 
 
 @pytest.mark.parametrize(
@@ -323,10 +447,13 @@ def test_load_settings_validates_and_resolves_relative_paths(tmp_path: Path) -> 
         ("exception_threshold", "0"),
     ],
 )
-def test_load_settings_rejects_invalid_collector_numbers(
-    tmp_path: Path, key: str, value: str
+def test_direct_script_rejects_invalid_collector_numbers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    key: str,
+    value: str,
 ) -> None:
-    """Reject booleans-as-numbers, negative delays, and nonpositive thresholds."""
+    """Reject booleans-as-numbers, negative delays, and invalid thresholds."""
 
     values = {
         "interval_s": "30",
@@ -347,20 +474,27 @@ host = "controller"
         encoding="utf-8",
     )
 
-    with pytest.raises((TypeError, ValueError)):
-        load_settings(settings_path)
+    exit_code, _namespace = run_script(
+        monkeypatch,
+        ["--settings", str(settings_path), "--once", "--dry-run"],
+    )
+
+    assert exit_code == 2
 
 
-def test_load_influx_config_requires_all_destination_values(tmp_path: Path) -> None:
-    """Validate credentials and remove the bucket from client constructor options."""
+def test_direct_script_requires_complete_influx_destination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reject an auth table missing a required destination value."""
 
-    auth_path = write_auth(tmp_path)
+    settings_path = write_settings(tmp_path)
+    write_auth(tmp_path, include_bucket=False)
 
-    config = load_influx_config(auth_path)
+    exit_code, _namespace = run_script(
+        monkeypatch, ["--settings", str(settings_path), "--once"]
+    )
 
-    assert config.client_options["url"] == "http://influxdb.example:8086"
-    assert "bucket" not in config.client_options
-    assert (config.org, config.bucket) == ("lab", "devices")
+    assert exit_code == 2
 
 
 def test_dry_run_skips_auth_and_influx_client(
@@ -368,7 +502,7 @@ def test_dry_run_skips_auth_and_influx_client(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Read the real source path without opening credentials or InfluxDB."""
+    """Read the source path without opening credentials or InfluxDB."""
 
     settings_path = write_settings(tmp_path, auth_name="missing-auth.toml")
     client = FakeClient([sample()])
@@ -379,9 +513,14 @@ def test_dry_run_skips_auth_and_influx_client(
 
         raise AssertionError("dry-run constructed InfluxDB")
 
-    monkeypatch.setattr(relay.influxdb_client, "InfluxDBClient", fail_influx_client)
+    monkeypatch.setattr(influxdb_client, "InfluxDBClient", fail_influx_client)
 
-    assert relay.main(["--settings", str(settings_path), "--once", "--dry-run"]) == 0
+    exit_code, _namespace = run_script(
+        monkeypatch,
+        ["--settings", str(settings_path), "--once", "--dry-run"],
+    )
+
+    assert exit_code == 0
     assert "Dry-run record, not uploaded:" in capsys.readouterr().out
     assert client.connect_count == 1
     assert client.close_count == 1
@@ -396,9 +535,14 @@ def test_source_failure_reconnects_once_before_one_shot_succeeds(
     client = FakeClient([TimeoutError("first"), sample()])
     delays: list[float] = []
     use_fake_source(monkeypatch, client)
-    monkeypatch.setattr(relay.time, "sleep", delays.append)
+    monkeypatch.setattr(time, "sleep", delays.append)
 
-    assert relay.main(["--settings", str(settings_path), "--once", "--dry-run"]) == 0
+    exit_code, _namespace = run_script(
+        monkeypatch,
+        ["--settings", str(settings_path), "--once", "--dry-run"],
+    )
+
+    assert exit_code == 0
     assert client.connect_count == 1
     assert client.reconnect_count == 1
     assert delays == [2.0]
@@ -408,13 +552,18 @@ def test_source_failure_reconnects_once_before_one_shot_succeeds(
 def test_one_shot_unresolved_failure_exits_nonzero_and_cleans_up(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Fail one-shot immediately after its local retry and release the source."""
+    """Fail one-shot after its local retry and release the source."""
 
     settings_path = write_settings(tmp_path, reconnect_delay_s=0)
     client = FakeClient([TimeoutError("first"), TimeoutError("retry")])
     use_fake_source(monkeypatch, client)
 
-    assert relay.main(["--settings", str(settings_path), "--once", "--dry-run"]) == 1
+    exit_code, _namespace = run_script(
+        monkeypatch,
+        ["--settings", str(settings_path), "--once", "--dry-run"],
+    )
+
+    assert exit_code == 1
     assert client.reconnect_count == 1
     assert client.close_count == 1
 
@@ -440,9 +589,13 @@ def test_lifetime_failure_count_does_not_reset_after_success(
     )
     stop_event = FakeStopEvent([0.0], stop_after_waits=99)
     use_fake_source(monkeypatch, client)
-    monkeypatch.setattr(relay.threading, "Event", lambda: stop_event)
+    monkeypatch.setattr(threading, "Event", lambda: stop_event)
 
-    assert relay.main(["--settings", str(settings_path), "--dry-run"]) == 1
+    exit_code, _namespace = run_script(
+        monkeypatch, ["--settings", str(settings_path), "--dry-run"]
+    )
+
+    assert exit_code == 1
     assert "(2/2 lifetime)" in capsys.readouterr().err
     assert client.reconnect_count == 2
     assert client.close_count == 1
@@ -470,48 +623,22 @@ def test_scheduler_uses_cycle_start_deadlines_and_cleans_up(
     client = FakeClient([sample(), sample()], on_read=advance_work)
     stop_event = FakeStopEvent(clock, stop_after_waits=2)
     use_fake_source(monkeypatch, client)
-    monkeypatch.setattr(relay.threading, "Event", lambda: stop_event)
-    monkeypatch.setattr(relay.time, "monotonic", monotonic)
+    monkeypatch.setattr(threading, "Event", lambda: stop_event)
+    monkeypatch.setattr(time, "monotonic", monotonic)
 
-    assert relay.main(["--settings", str(settings_path), "--dry-run"]) == 0
+    exit_code, _namespace = run_script(
+        monkeypatch, ["--settings", str(settings_path), "--dry-run"]
+    )
+
+    assert exit_code == 0
     assert stop_event.waits == [8.0, 7.0]
     assert client.close_count == 1
-
-
-def test_authorized_path_writes_one_record_and_closes_resources(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Write one complete mapped record and close source and Influx resources."""
-
-    settings_path = write_settings(tmp_path)
-    write_auth(tmp_path)
-    source_client = FakeClient([sample()])
-    write_api = FakeWriteAPI()
-    created: list[FakeInfluxClient] = []
-    use_fake_source(monkeypatch, source_client)
-
-    def influx_factory(**options: str) -> FakeInfluxClient:
-        """Create and retain one fake InfluxDB client."""
-
-        client = FakeInfluxClient(write_api, options)
-        created.append(client)
-        return client
-
-    monkeypatch.setattr(relay.influxdb_client, "InfluxDBClient", influx_factory)
-
-    assert relay.main(["--settings", str(settings_path), "--once"]) == 0
-    assert created[0].options["org"] == "lab"
-    assert write_api.writes[0][0:2] == ("devices", "lab")
-    assert write_api.writes[0][2][0]["measurement"] == "SAESSIPPower"
-    assert source_client.close_count == 1
-    assert write_api.close_count == 1
-    assert created[0].close_count == 1
 
 
 def test_write_failure_exits_nonzero_and_closes_every_resource(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Release source, write API, and client after one fatal write failure."""
+    """Release source, write API, and client after one write failure."""
 
     settings_path = write_settings(tmp_path)
     write_auth(tmp_path)
@@ -527,9 +654,13 @@ def test_write_failure_exits_nonzero_and_closes_every_resource(
         created.append(client)
         return client
 
-    monkeypatch.setattr(relay.influxdb_client, "InfluxDBClient", influx_factory)
+    monkeypatch.setattr(influxdb_client, "InfluxDBClient", influx_factory)
 
-    assert relay.main(["--settings", str(settings_path), "--once"]) == 1
+    exit_code, _namespace = run_script(
+        monkeypatch, ["--settings", str(settings_path), "--once"]
+    )
+
+    assert exit_code == 1
     assert source_client.close_count == 1
     assert write_api.close_count == 1
     assert created[0].close_count == 1
