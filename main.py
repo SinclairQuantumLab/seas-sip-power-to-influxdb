@@ -16,150 +16,208 @@ from influxdb_client.client.write_api import SYNCHRONOUS, WriteApi
 from saes_sip_power_client import SAESSIPPowerClient, SAESSIPPowerSettings
 from supervisor.supervisor_helper import log, log_error, log_warn
 
-parser = argparse.ArgumentParser(description="Relay SAES SIP POWER to InfluxDB")
-parser.add_argument("--settings", type=Path, default=Path("settings.toml"))
-parser.add_argument("--once", action="store_true")
-parser.add_argument("--dry-run", action="store_true")
-arguments = parser.parse_args()
+print()
+print("----- SAES SIP POWER ion pump controller -> InfluxDB uploader -----")
+print()
 
 
-# Load and narrow application settings before opening either external system.
+# >>>>> app configuration >>>>>
+
+# >>> load & parse config files >>>
+PARSER = argparse.ArgumentParser(description="Relay SAES SIP POWER to InfluxDB")
+PARSER.add_argument("--settings", type=Path, default=Path("settings.toml"))
+PARSER.add_argument("--once", action="store_true")
+PARSER.add_argument("--dry-run", action="store_true")
+ARGS = PARSER.parse_args()
+
 try:
-    settings_path = arguments.settings.expanduser().resolve()
-    with settings_path.open("rb") as settings_file:
-        settings_values: dict[str, object] = tomllib.load(settings_file)
+    SETTINGS_PATH = ARGS.settings.expanduser().resolve()
+    with SETTINGS_PATH.open("rb") as f:
+        SETTINGS: dict[str, object] = tomllib.load(f)
 
-    measurement_value = settings_values.get("measurement")
-    if not isinstance(measurement_value, str) or not measurement_value.strip():
+    MEASUREMENT_value = SETTINGS.get("measurement")
+    if not isinstance(MEASUREMENT_value, str) or not MEASUREMENT_value.strip():
         raise ValueError("settings.measurement must be a nonempty string")
-    measurement = measurement_value.strip()
+    MEASUREMENT = MEASUREMENT_value.strip()
 
-    interval_value = settings_values.get("interval_s")
-    if isinstance(interval_value, bool) or not isinstance(
-        interval_value, (int, float)
+    INTERVAL_value = SETTINGS.get("interval_s")
+    if isinstance(INTERVAL_value, bool) or not isinstance(
+        INTERVAL_value, (int, float)
     ):
         raise TypeError("settings.interval_s must be a number")
-    interval_s = float(interval_value)
-    if not math.isfinite(interval_s) or interval_s <= 0:
+    INTERVAL_s = float(INTERVAL_value)
+    if not math.isfinite(INTERVAL_s) or INTERVAL_s <= 0:
         raise ValueError("settings.interval_s must be finite and positive")
 
-    reconnect_delay_value = settings_values.get("reconnect_delay_s")
-    if isinstance(reconnect_delay_value, bool) or not isinstance(
-        reconnect_delay_value, (int, float)
+    RECONNECT_DELAY_value = SETTINGS.get("reconnect_delay_s")
+    if isinstance(RECONNECT_DELAY_value, bool) or not isinstance(
+        RECONNECT_DELAY_value, (int, float)
     ):
         raise TypeError("settings.reconnect_delay_s must be a number")
-    reconnect_delay_s = float(reconnect_delay_value)
-    if not math.isfinite(reconnect_delay_s) or reconnect_delay_s < 0:
+    RECONNECT_DELAY_s = float(RECONNECT_DELAY_value)
+    if not math.isfinite(RECONNECT_DELAY_s) or RECONNECT_DELAY_s < 0:
         raise ValueError("settings.reconnect_delay_s must be finite and nonnegative")
 
-    exception_threshold_value = settings_values.get("exception_threshold")
+    EX_THRESHOLD_value = SETTINGS.get("exception_threshold")
     if (
-        isinstance(exception_threshold_value, bool)
-        or not isinstance(exception_threshold_value, int)
-        or exception_threshold_value <= 0
+        isinstance(EX_THRESHOLD_value, bool)
+        or not isinstance(EX_THRESHOLD_value, int)
+        or EX_THRESHOLD_value <= 0
     ):
         raise ValueError("settings.exception_threshold must be a positive integer")
-    exception_threshold = exception_threshold_value
+    EX_THRESHOLD = EX_THRESHOLD_value
 
-    auth_path_value = settings_values.get("auth_path", "auth.toml")
-    if not isinstance(auth_path_value, str) or not auth_path_value.strip():
+    AUTH_PATH_value = SETTINGS.get("auth_path", "imaq-secret/auth.toml")
+    if not isinstance(AUTH_PATH_value, str) or not AUTH_PATH_value.strip():
         raise ValueError("settings.auth_path must be a nonempty path string")
-    auth_path = Path(auth_path_value).expanduser()
-    if not auth_path.is_absolute():
-        auth_path = settings_path.parent / auth_path
-    auth_path = auth_path.resolve()
+    AUTH_PATH = Path(AUTH_PATH_value).expanduser()
+    if not AUTH_PATH.is_absolute():
+        AUTH_PATH = SETTINGS_PATH.parent / AUTH_PATH
+    AUTH_PATH = AUTH_PATH.resolve()
 
-    source_values = settings_values.get("source")
-    if not isinstance(source_values, dict):
+    SOURCE_values = SETTINGS.get("source")
+    if not isinstance(SOURCE_values, dict):
         raise TypeError("settings must contain a [source] table")
-    source_settings = SAESSIPPowerSettings.from_mapping(source_values)
+    SOURCE_SETTINGS = SAESSIPPowerSettings.from_mapping(SOURCE_values)
+except (OSError, TypeError, ValueError, tomllib.TOMLDecodeError) as ex:
+    log_error(f"Configuration error: {type(ex).__name__}: {ex}")
+    raise SystemExit(2) from ex
+# <<< load & parse config files <<<
 
-    influx_options: dict[str, str] | None = None
-    influx_org: str | None = None
-    influx_bucket: str | None = None
+print(
+    f"Polling interval = {INTERVAL_s} s, "
+    f"exception threshold = {EX_THRESHOLD}."
+)
+print(
+    f"SAES SIP POWER controller = "
+    f"{SOURCE_SETTINGS.host}:{SOURCE_SETTINGS.port}."
+)
+print(f"Settings file = {SETTINGS_PATH}.")
+print(f"InfluxDB upload = {'disabled (dry-run)' if ARGS.dry_run else 'enabled'}.")
+print()
 
-    # A dry-run deliberately stops credential access at this boundary.
-    if not arguments.dry_run:
-        with auth_path.open("rb") as auth_file:
-            auth_values: dict[str, object] = tomllib.load(auth_file)
-        influx_values = auth_values.get("influxdb")
-        if not isinstance(influx_values, dict):
-            raise TypeError("auth file must contain an [influxdb] table")
+# <<<<< app configuration <<<<<
 
-        influx_url_value = influx_values.get("url")
-        influx_token_value = influx_values.get("token")
-        influx_org_value = influx_values.get("org")
-        influx_bucket_value = influx_values.get("bucket")
+
+# >>> load IMAQ secret >>>
+AUTH: dict[str, object] | None = None
+if not ARGS.dry_run:
+    try:
+        with AUTH_PATH.open("rb") as f:
+            AUTH = tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError) as ex:
+        log_error(f"IMAQ secret error: {type(ex).__name__}: {ex}")
+        raise SystemExit(2) from ex
+# <<< load IMAQ secret <<<
+
+
+STOP_EVENT = threading.Event()
+for SIGNAL_NUMBER in (signal.SIGINT, signal.SIGTERM):
+    signal.signal(SIGNAL_NUMBER, lambda _signum, _frame: STOP_EVENT.set())
+
+
+# >>> InfluxDB configuration >>>
+INFLUXDB_CONFIG: dict[str, str] | None = None
+INFLUXDB_ORG: str | None = None
+INFLUXDB_BUCKET: str | None = None
+
+if AUTH is not None:
+    try:
+        INFLUXDB_values = AUTH.get("influxdb")
+        if not isinstance(INFLUXDB_values, dict):
+            raise TypeError("IMAQ secret must contain an [influxdb] table")
+
+        INFLUXDB_URL_value = INFLUXDB_values.get("url")
+        INFLUXDB_TOKEN_value = INFLUXDB_values.get("token")
+        INFLUXDB_ORG_value = INFLUXDB_values.get("org")
+        INFLUXDB_BUCKET_value = INFLUXDB_values.get("bucket")
         for key, value in (
-            ("url", influx_url_value),
-            ("token", influx_token_value),
-            ("org", influx_org_value),
-            ("bucket", influx_bucket_value),
+            ("url", INFLUXDB_URL_value),
+            ("token", INFLUXDB_TOKEN_value),
+            ("org", INFLUXDB_ORG_value),
+            ("bucket", INFLUXDB_BUCKET_value),
         ):
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"influxdb.{key} must be a nonempty string")
 
-        # The checks above narrow these four values to nonempty strings.
-        assert isinstance(influx_url_value, str)
-        assert isinstance(influx_token_value, str)
-        assert isinstance(influx_org_value, str)
-        assert isinstance(influx_bucket_value, str)
-        influx_org = influx_org_value.strip()
-        influx_bucket = influx_bucket_value.strip()
-        influx_options = {
-            "url": influx_url_value.strip(),
-            "token": influx_token_value.strip(),
-            "org": influx_org,
+        assert isinstance(INFLUXDB_URL_value, str)
+        assert isinstance(INFLUXDB_TOKEN_value, str)
+        assert isinstance(INFLUXDB_ORG_value, str)
+        assert isinstance(INFLUXDB_BUCKET_value, str)
+        INFLUXDB_ORG = INFLUXDB_ORG_value.strip()
+        INFLUXDB_BUCKET = INFLUXDB_BUCKET_value.strip()
+        INFLUXDB_CONFIG = {
+            "url": INFLUXDB_URL_value.strip(),
+            "token": INFLUXDB_TOKEN_value.strip(),
+            "org": INFLUXDB_ORG,
         }
-except (OSError, TypeError, ValueError, tomllib.TOMLDecodeError) as error:
-    log_error(f"Configuration error: {type(error).__name__}: {error}")
-    raise SystemExit(2) from error
+    except (TypeError, ValueError) as ex:
+        log_error(f"InfluxDB configuration error: {type(ex).__name__}: {ex}")
+        raise SystemExit(2) from ex
 
-
-print()
-print("----- SAES SIP POWER -> InfluxDB relay -----")
-print()
-print(f"Controller: {source_settings.host}:{source_settings.port}")
-print(f"Polling interval: {interval_s} s")
-print(f"Exception threshold: {exception_threshold} lifetime failures")
-print(f"InfluxDB upload: {'disabled (dry-run)' if arguments.dry_run else 'enabled'}")
-print()
-
-
-stop_event = threading.Event()
-for signal_number in (signal.SIGINT, signal.SIGTERM):
-    signal.signal(signal_number, lambda _signum, _frame: stop_event.set())
-
-source_client = SAESSIPPowerClient(source_settings)
-influx_client: influxdb_client.InfluxDBClient | None = None
-write_api: WriteApi | None = None
-exit_code = 0
+INFLUXDB_CLIENT: influxdb_client.InfluxDBClient | None = None
+INFLUXDB_WRITE_API: WriteApi | None = None
 
 try:
-    if influx_options is not None:
-        influx_client = influxdb_client.InfluxDBClient(**influx_options)
-        write_api = influx_client.write_api(write_options=SYNCHRONOUS)
+    if INFLUXDB_CONFIG is not None:
+        # Initialize the InfluxDB Client and the Write API.
+        INFLUXDB_CLIENT = influxdb_client.InfluxDBClient(**INFLUXDB_CONFIG)
+        INFLUXDB_WRITE_API = INFLUXDB_CLIENT.write_api(write_options=SYNCHRONOUS)
+        print(
+            f"InfluxDB client initialized for org='{INFLUXDB_ORG}', "
+            f"bucket='{INFLUXDB_BUCKET}'."
+        )
+        print()
+except Exception as ex:
+    log_error(f"InfluxDB initialization error: {type(ex).__name__}: {ex}")
+    try:
+        if INFLUXDB_WRITE_API is not None:
+            INFLUXDB_WRITE_API.close()
+    finally:
+        if INFLUXDB_CLIENT is not None:
+            INFLUXDB_CLIENT.close()
+    raise SystemExit(1) from ex
+# <<< InfluxDB configuration <<<
 
+
+# >>> SAES SIP POWER connection >>>
+SIP_POWER_CLIENT = SAESSIPPowerClient(SOURCE_SETTINGS)
+# <<< SAES SIP POWER connection <<<
+
+
+exit_code = 0
+try:
     lifetime_exception_count = 0
     iteration = 1
     next_poll = time.monotonic()
 
-    while not stop_event.is_set():
+    print("Entering main polling loop...")
+    print()
+
+    while not STOP_EVENT.is_set():
+        msg_il = f"Iteration {iteration}: "
+
         try:
+            # >>>>> query readings >>>>>
+
             # One unresolved source failure receives one reconnect and retry.
             try:
-                if not source_client.is_connected:
-                    source_client.connect()
-                sample = source_client.read_sample()
-            except Exception as first_error:
-                log_warn(
-                    "Source read failed; reconnecting before one retry: "
-                    f"{type(first_error).__name__}: {first_error}"
+                if not SIP_POWER_CLIENT.is_connected:
+                    SIP_POWER_CLIENT.connect()
+                sample = SIP_POWER_CLIENT.read_sample()
+            except Exception as ex:
+                log_error(msg_il)
+                log_error(
+                    f"SAES SIP POWER query failed: {type(ex).__name__}: {ex}"
                 )
-                if reconnect_delay_s:
-                    time.sleep(reconnect_delay_s)
-                source_client.reconnect()
-                sample = source_client.read_sample()
+                log_warn(
+                    "Re-establishing SAES SIP POWER connection and retrying once..."
+                )
+                if RECONNECT_DELAY_s:
+                    time.sleep(RECONNECT_DELAY_s)
+                SIP_POWER_CLIENT.reconnect()
+                log_warn("SAES SIP POWER reconnection succeeded.")
+                sample = SIP_POWER_CLIENT.read_sample()
 
             if sample.observed_at.utcoffset() is None:
                 raise ValueError("sample.observed_at must be timezone-aware")
@@ -215,7 +273,7 @@ try:
                 fields["Pressure[Torr]"] = sample.pressure_torr
 
             influxdb_record: dict[str, object] = {
-                "measurement": measurement,
+                "measurement": MEASUREMENT,
                 "tags": {
                     "source": "SAES SIP POWER",
                     "Serial number": sample.device_id,
@@ -225,63 +283,67 @@ try:
             }
             influxdb_records = [influxdb_record]
 
-            if write_api is None:
-                log(
-                    f"Iteration {iteration}: Dry-run record, not uploaded: "
-                    f"{influxdb_records!r}"
-                )
+            # <<<<< query readings <<<<<
+
+            if INFLUXDB_WRITE_API is None:
+                log(msg_il + f"Dry-run record, not uploaded: {influxdb_records!r}")
             else:
-                assert influx_bucket is not None
-                assert influx_org is not None
-                write_api.write(
-                    bucket=influx_bucket,
-                    org=influx_org,
+                assert INFLUXDB_BUCKET is not None
+                assert INFLUXDB_ORG is not None
+                INFLUXDB_WRITE_API.write(
+                    bucket=INFLUXDB_BUCKET,
+                    org=INFLUXDB_ORG,
                     record=influxdb_records,
                 )
-                log(f"Iteration {iteration}: Uploaded {influxdb_records!r}")
-        except Exception as error:
+                log(msg_il + f"Uploaded {influxdb_records!r}")
+        except Exception as ex:
             # A one-shot command has no later cycle in which to recover.
-            if arguments.once:
+            if ARGS.once:
                 raise
             lifetime_exception_count += 1
+            log_error(msg_il)
             log_error(
-                f"Iteration {iteration} failed "
-                f"({lifetime_exception_count}/{exception_threshold} lifetime): "
-                f"{type(error).__name__}: {error}"
+                "Error during measurement/upload "
+                f"({lifetime_exception_count}/{EX_THRESHOLD} lifetime): "
+                f"{type(ex).__name__}: {ex}"
             )
-            if lifetime_exception_count >= exception_threshold:
+            if lifetime_exception_count >= EX_THRESHOLD:
+                log_error("Exception threshold reached. Raising to supervisor.")
                 raise
 
-        if arguments.once:
+        if ARGS.once:
             break
 
         # Cycle-start deadlines avoid adding acquisition time to every period.
         iteration += 1
-        next_poll += interval_s
+        next_poll += INTERVAL_s
         now = time.monotonic()
         if next_poll <= now:
-            next_poll = now + interval_s
-        stop_event.wait(next_poll - now)
+            next_poll = now + INTERVAL_s
+        STOP_EVENT.wait(next_poll - now)
 except KeyboardInterrupt:
+    log_warn("KeyboardInterrupt received.")
     exit_code = 130
-except Exception as error:
-    log_error(f"Fatal collector error: {type(error).__name__}: {error}")
+except Exception as ex:
+    log_error(f"Fatal collector error: {type(ex).__name__}: {ex}")
     exit_code = 1
 finally:
+    log("Shutting down gracefully...", end=" ")
     try:
-        source_client.close()
-    except Exception as error:
-        log_warn(f"Source cleanup failed: {type(error).__name__}: {error}")
+        SIP_POWER_CLIENT.close()
+    except Exception as ex:
+        log_warn(f"SAES SIP POWER cleanup failed: {type(ex).__name__}: {ex}")
     try:
-        if write_api is not None:
-            write_api.close()
-    except Exception as error:
-        log_warn(f"InfluxDB write API cleanup failed: {type(error).__name__}: {error}")
+        if INFLUXDB_WRITE_API is not None:
+            INFLUXDB_WRITE_API.close()
+    except Exception as ex:
+        log_warn(f"InfluxDB write API cleanup failed: {type(ex).__name__}: {ex}")
     try:
-        if influx_client is not None:
-            influx_client.close()
-    except Exception as error:
-        log_warn(f"InfluxDB client cleanup failed: {type(error).__name__}: {error}")
+        if INFLUXDB_CLIENT is not None:
+            INFLUXDB_CLIENT.close()
+    except Exception as ex:
+        log_warn(f"InfluxDB client cleanup failed: {type(ex).__name__}: {ex}")
+    print("Done")
 
 if exit_code:
     raise SystemExit(exit_code)

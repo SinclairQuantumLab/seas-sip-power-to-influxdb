@@ -80,7 +80,7 @@ def write_settings(
     interval_s: float = 10,
     reconnect_delay_s: float = 2,
     exception_threshold: int = 3,
-    auth_name: str = "auth.toml",
+    auth_name: str = "imaq-secret/auth.toml",
 ) -> Path:
     """Write one synthetic deployment settings file for a script test."""
 
@@ -107,7 +107,8 @@ def write_auth(tmp_path: Path, *, include_bucket: bool = True) -> Path:
     """Write synthetic nonsecret InfluxDB destination values."""
 
     bucket = 'bucket = "devices"' if include_bucket else ""
-    auth_path = tmp_path / "auth.toml"
+    auth_path = tmp_path / "imaq-secret" / "auth.toml"
+    auth_path.parent.mkdir()
     auth_path.write_text(
         f"""
 [influxdb]
@@ -434,9 +435,11 @@ def test_settings_are_narrowed_and_relative_auth_is_resolved(
 
     assert exit_code == 0
     assert captured == [SAESSIPPowerSettings("192.168.50.34", 2527, 3.0)]
-    assert namespace["auth_path"] == (tmp_path / "auth.toml").resolve()
-    assert namespace["interval_s"] == 30.0
-    assert namespace["reconnect_delay_s"] == 1.0
+    assert namespace["AUTH_PATH"] == (
+        tmp_path / "imaq-secret" / "auth.toml"
+    ).resolve()
+    assert namespace["INTERVAL_s"] == 30.0
+    assert namespace["RECONNECT_DELAY_s"] == 1.0
 
 
 @pytest.mark.parametrize(

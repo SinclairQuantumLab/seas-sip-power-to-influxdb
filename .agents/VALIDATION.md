@@ -9,7 +9,8 @@ Environment: Windows host on the controller LAN, endpoint
    header with a 3-second receive timeout. Result: response peer
    `192.168.50.34:2527`, length 302, version 1, command 128.
 2. The finished direct top-level script ran after removal of application helper
-   functions and `main()`:
+   functions and `main()`, and after alignment with the Sinclair family section
+   comments and `imaq-secret` path:
 
    ```text
    uv run python main.py --settings settings.toml.template --once --dry-run
@@ -32,6 +33,10 @@ No raw response frame was retained and no controller state was changed.
 - Baseline/current AST comparison: all 45 InfluxDB field/tag-to-sample mappings
   and all three CLI flags were identical. The finished `main.py` contains no
   function or class definitions.
+- Sinclair family style check: application configuration, IMAQ secret,
+  InfluxDB configuration, source connection, and query sections use the common
+  paired comment markers. The tracked `imaq-secret` gitlink uses the common
+  Sinclair submodule URL; credential contents were not inspected.
 
 The suite executes `main.py` as a script and covers settings, source framing and
 every field group, truncated and wrong-header frames, timestamps, record
@@ -41,8 +46,8 @@ failure, and cleanup.
 
 ## Not run
 
-- InfluxDB upload: requires an authorized `auth.toml` and explicit operator
-  authorization.
+- InfluxDB upload: requires the authorized `imaq-secret/auth.toml` submodule
+  content and explicit operator authorization.
 - Continuous live polling: one current dry-run cycle was sufficient for the
   read path; service operation was not started.
 - Supervisor deployment: no deployment host has been selected.

@@ -12,10 +12,10 @@ def _prefix() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def log(message: str) -> None:
+def log(message: str, *, end: str | None = "\n") -> None:
     """Write an ordinary timestamped status message to stdout."""
 
-    print(f"{_prefix()} {message}", flush=True)
+    print(f"{_prefix()} {message}", end=end, flush=True)
 
 
 def log_warn(message: str) -> None:

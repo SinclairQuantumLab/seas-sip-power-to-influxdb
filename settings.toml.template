@@ -1,10 +1,26 @@
-# Copy this file to settings.toml before running the relay.
-measurement = "SAESSIPPower"
-interval_s = 30
-reconnect_delay_s = 1
-exception_threshold = 3
-auth_path = "auth.toml"
+# Settings configuration file for seas-pump-to-influxdb app
+# Copy this file, remove `.template` extension, and setup the below.
+# See README.md for detail.
 
+# InfluxDB measurement name.
+measurement = "SAESSIPPower"
+
+# Interval of periodic relay loop in seconds.
+interval_s = 30
+
+# Delay before one connection replacement and retry in seconds.
+reconnect_delay_s = 1
+
+# Number of total unresolved loop exceptions tolerated before raising.
+# Successful loops do not reset this lifetime counter. When the counter reaches
+# exception_threshold, the exception is raised so the process supervisor can
+# restart the app.
+exception_threshold = 3
+
+# IMAQ Lab InfluxDB credential file supplied by the private submodule.
+auth_path = "imaq-secret/auth.toml"
+
+# SAES SIP POWER Ethernet connection.
 [source]
 host = "192.168.50.34"
 port = 2527

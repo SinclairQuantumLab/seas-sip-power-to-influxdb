@@ -26,9 +26,27 @@ and network information.
 - [uv](https://docs.astral.sh/uv/) and Python 3.11 or newer
 - An Ethernet-equipped SAES SIP POWER; the default settings use
   `192.168.50.34:2527`
+- Access to the private
+  [`imaq-secret`](https://github.com/SinclairQuantumLab/imaq-secret.git)
+  repository for upload-enabled runs
 - InfluxDB 2.x credentials only when upload is enabled; dry-run needs none
 
-Install the locked project environment:
+Clone this repository with the IMAQ Lab secret submodule at the expected path:
+
+```powershell
+git clone --recurse-submodules https://github.com/SinclairQuantumLab/seas-pump-to-influxdb.git
+Set-Location seas-pump-to-influxdb
+```
+
+The `--recurse-submodules` option clones the private `imaq-secret` repository
+into this checkout. If this repository was already cloned without submodules,
+recover the missing submodule with the exact command:
+
+```powershell
+git submodule update --init --recursive
+```
+
+Install the project environment:
 
 ```powershell
 uv sync
@@ -76,7 +94,7 @@ states another unit.
 | `interval_s` | `30` | Positive interval between cycle start times. |
 | `reconnect_delay_s` | `1` | Nonnegative delay before one socket replacement and retry. |
 | `exception_threshold` | `3` | Positive cumulative unresolved-failure limit before the process exits nonzero. |
-| `auth_path` | `auth.toml` | Authentication file path, resolved relative to `settings.toml`. Dry-run never opens it. |
+| `auth_path` | `imaq-secret/auth.toml` | IMAQ Lab authentication file path, resolved relative to `settings.toml`. Dry-run never opens it. |
 | `source.host` | `192.168.50.34` | Controller IPv4 address or DNS name. |
 | `source.port` | `2527` | UDP port in the range 1-65535. SIP POWER documents 2527 as hard-coded. |
 | `source.timeout_s` | `3` | Positive finite timeout for each UDP response. |
@@ -87,19 +105,11 @@ and log paths.
 
 ### InfluxDB authentication
 
-For upload, create the ignored file selected by `auth_path`:
-
-```toml
-[influxdb]
-url = "http://INFLUXDB_HOST:8086"
-token = "<INFLUXDB_API_TOKEN>"
-org = "REPLACE_WITH_ORG"
-bucket = "REPLACE_WITH_BUCKET"
-```
-
-Keep this file private. Do not commit it, paste its values into logs, or place
-credentials in `settings.toml`. After the dry-run succeeds, an operator who is
-authorized to write to that bucket can perform exactly one upload:
+For Sinclair deployment, the private `imaq-secret` submodule supplies
+`imaq-secret/auth.toml` at the path selected by `auth_path`. Do not copy its
+values into `settings.toml`, logs, commands, or this repository. After the
+dry-run succeeds, an operator who is authorized to write to the configured
+bucket can perform exactly one upload:
 
 ```powershell
 uv run python main.py --once
@@ -276,6 +286,8 @@ command, project directory, and log paths before starting the program.
 Dry-run works but upload fails:
 
 - Confirm `auth_path` resolves relative to the selected settings file.
+- Run `git submodule update --init --recursive` if `imaq-secret/auth.toml` is
+  absent from an existing checkout.
 - Verify `[influxdb]` contains nonempty `url`, `token`, `org`, and `bucket`.
 - Check token write permission, organization/bucket spelling, and InfluxDB
   network reachability.

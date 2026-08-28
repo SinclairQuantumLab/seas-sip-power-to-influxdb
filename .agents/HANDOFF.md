@@ -7,20 +7,22 @@ one SAES SIP POWER over Ethernet UDP. `main.py` is a direct top-level polling
 script with no application functions or classes: CLI parsing, configuration,
 InfluxDB setup, acquisition, record mapping, upload, recovery, and cleanup run
 sequentially from top to bottom. Only the stateful UDP protocol boundary remains
-a reusable client. Dual-platform startup, Supervisor templates, tests, lockfile,
-and the operator README are present. Offline checks and a current real-device
-dry-run passed after the direct-script rewrite on 2026-08-28.
+a reusable client. The main script uses the established Sinclair paired section
+comments and uppercase IMAQ/InfluxDB configuration names. The common private
+`imaq-secret` repository is tracked as a submodule at `imaq-secret`. Dual-platform
+startup, Supervisor templates, tests, lockfile, and the operator README are
+present. Offline checks and a current real-device dry-run passed after the
+family-style alignment on 2026-08-28.
 
 ## Next action
 
-Create the ignored `auth.toml` with authorized InfluxDB values, then run exactly
+With an authorized checkout of the private `imaq-secret` submodule, run exactly
 one `uv run python main.py --once` upload and confirm the point before starting
 `Startup.ps1`, `Startup.sh`, or Supervisor.
 
 ## Blockers and unknowns
 
-- No InfluxDB credentials or upload authorization were supplied, so upload was
-  intentionally not attempted.
+- The `imaq-secret` submodule is tracked at the common Sinclair path. Its
+  credential contents were not inspected or printed, and no upload
+  authorization was supplied, so upload was intentionally not attempted.
 - No deployment host or Supervisor installation has been selected.
-- The private `imaq-secret` repository was not added because that separate
-  credential-submodule action was not authorized.
