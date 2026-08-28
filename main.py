@@ -12,7 +12,11 @@ from pathlib import Path
 import influxdb_client
 from influxdb_client.client.write_api import SYNCHRONOUS
 
-from saes_sip_power_client import SAESSIPPowerClient, SAESSIPPowerSettings
+from saes_sip_power_client import (
+    DEFAULT_PORT,
+    SAESSIPPowerClient,
+    SAESSIPPowerSettings,
+)
 from supervisor.supervisor_helper import log, log_error, log_warn
 
 print()
@@ -21,6 +25,9 @@ print()
 
 
 # >>>>> app configuration >>>>>
+
+MEASUREMENT = "SAESSIPPower"
+EX_THRESHOLD = 3
 
 # >>> load & parse config files >>>
 PARSER = argparse.ArgumentParser(description="Relay SAES SIP POWER to InfluxDB")
@@ -33,11 +40,12 @@ SETTINGS_PATH = ARGS.settings.expanduser().resolve()
 with SETTINGS_PATH.open("rb") as f:
     SETTINGS = tomllib.load(f)
 
-MEASUREMENT = SETTINGS["measurement"]
 INTERVAL_s = SETTINGS["interval_s"]
-RECONNECT_DELAY_s = SETTINGS["reconnect_delay_s"]
-EX_THRESHOLD = SETTINGS["exception_threshold"]
-SOURCE_SETTINGS = SAESSIPPowerSettings(**SETTINGS["source"])
+SOURCE_SETTINGS = SAESSIPPowerSettings(
+    host=SETTINGS["host"],
+    port=SETTINGS.get("port", DEFAULT_PORT),
+    timeout_s=SETTINGS["timeout_s"],
+)
 # <<< load & parse config files <<<
 
 print(
@@ -119,8 +127,6 @@ try:
                 log_warn(
                     "Re-establishing SAES SIP POWER connection and retrying once..."
                 )
-                if RECONNECT_DELAY_s:
-                    time.sleep(RECONNECT_DELAY_s)
                 SIP_POWER_CLIENT.reconnect()
                 log_warn("SAES SIP POWER reconnection succeeded.")
                 sample = SIP_POWER_CLIENT.read_sample()

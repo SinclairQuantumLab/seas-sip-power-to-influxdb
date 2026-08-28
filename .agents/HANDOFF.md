@@ -12,6 +12,10 @@ comments and uppercase IMAQ/InfluxDB configuration names. It reads trusted local
 TOML values directly without an application validation or narrowing layer, and
 passes `AUTH["influxdb"]` directly to the InfluxDB client. The common private
 `imaq-secret` repository is tracked as a submodule at `imaq-secret`.
+Deployment settings are flat and contain only the polling interval and source
+address/timeout; the optional port defaults to 2527. The measurement and
+three-failure lifetime threshold are fixed in `main.py`, and source retry is
+immediate.
 Dual-platform startup, Supervisor templates, tests, lockfile, and the operator
 README are present. Offline checks and a current real-device dry-run passed
 after the simplicity refactor on 2026-08-28.

@@ -2,23 +2,15 @@
 # Copy this file, remove `.template` extension, and setup the below.
 # See README.md for detail.
 
-# InfluxDB measurement name.
-measurement = "SAESSIPPower"
-
 # Interval of periodic relay loop in seconds.
 interval_s = 30
 
-# Delay before one connection replacement and retry in seconds.
-reconnect_delay_s = 1
-
-# Number of total unresolved loop exceptions tolerated before raising.
-# Successful loops do not reset this lifetime counter. When the counter reaches
-# exception_threshold, the exception is raised so the process supervisor can
-# restart the app.
-exception_threshold = 3
-
-# SAES SIP POWER Ethernet connection.
-[source]
+# SAES SIP POWER controller hostname or IP address.
 host = "192.168.50.34"
-port = 2527
+
+# SIP POWER uses UDP port 2527 by default.
+# Uncomment only when a different port is required.
+# port = 2527
+
+# UDP response timeout in seconds.
 timeout_s = 3

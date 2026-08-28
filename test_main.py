@@ -77,23 +77,17 @@ def write_settings(
     tmp_path: Path,
     *,
     interval_s: float = 10,
-    reconnect_delay_s: float = 2,
-    exception_threshold: int = 3,
+    port: int | None = None,
 ) -> Path:
     """Write one synthetic deployment settings file for a script test."""
 
     settings_path = tmp_path / "settings.toml"
+    port_line = "" if port is None else f"port = {port}\n"
     settings_path.write_text(
         f"""
-measurement = "SAESSIPPower"
 interval_s = {interval_s}
-reconnect_delay_s = {reconnect_delay_s}
-exception_threshold = {exception_threshold}
-
-[source]
 host = "192.168.50.34"
-port = 2527
-timeout_s = 3
+{port_line}timeout_s = 3
 """.strip(),
         encoding="utf-8",
     )
@@ -404,7 +398,7 @@ def test_direct_script_loads_settings(
 ) -> None:
     """Load the local settings directly and construct the source client."""
 
-    settings_path = write_settings(tmp_path, interval_s=30, reconnect_delay_s=1)
+    settings_path = write_settings(tmp_path, interval_s=30)
     captured = use_fake_source(monkeypatch, FakeClient([sample()]))
 
     exit_code, namespace = run_script(
@@ -415,7 +409,8 @@ def test_direct_script_loads_settings(
     assert exit_code == 0
     assert captured == [SAESSIPPowerSettings("192.168.50.34", 2527, 3.0)]
     assert namespace["INTERVAL_s"] == 30
-    assert namespace["RECONNECT_DELAY_s"] == 1
+    assert namespace["MEASUREMENT"] == "SAESSIPPower"
+    assert namespace["EX_THRESHOLD"] == 3
 
 
 def test_dry_run_skips_auth_and_influx_client(
@@ -452,11 +447,9 @@ def test_source_failure_reconnects_once_before_one_shot_succeeds(
 ) -> None:
     """Replace the socket and retry one failed source read locally."""
 
-    settings_path = write_settings(tmp_path, reconnect_delay_s=2)
+    settings_path = write_settings(tmp_path)
     client = FakeClient([TimeoutError("first"), sample()])
-    delays: list[float] = []
     use_fake_source(monkeypatch, client)
-    monkeypatch.setattr(time, "sleep", delays.append)
 
     exit_code, _namespace = run_script(
         monkeypatch,
@@ -466,7 +459,6 @@ def test_source_failure_reconnects_once_before_one_shot_succeeds(
     assert exit_code == 0
     assert client.connect_count == 1
     assert client.reconnect_count == 1
-    assert delays == [2.0]
     assert client.close_count == 1
 
 
@@ -475,7 +467,7 @@ def test_one_shot_unresolved_failure_exits_nonzero_and_cleans_up(
 ) -> None:
     """Fail one-shot after its local retry and release the source."""
 
-    settings_path = write_settings(tmp_path, reconnect_delay_s=0)
+    settings_path = write_settings(tmp_path)
     client = FakeClient([TimeoutError("first"), TimeoutError("retry")])
     use_fake_source(monkeypatch, client)
 
@@ -496,9 +488,7 @@ def test_lifetime_failure_count_does_not_reset_after_success(
 ) -> None:
     """Reach the cumulative threshold despite a successful middle cycle."""
 
-    settings_path = write_settings(
-        tmp_path, interval_s=1, reconnect_delay_s=0, exception_threshold=2
-    )
+    settings_path = write_settings(tmp_path, interval_s=1)
     client = FakeClient(
         [
             TimeoutError("cycle one"),
@@ -506,6 +496,8 @@ def test_lifetime_failure_count_does_not_reset_after_success(
             sample(),
             TimeoutError("cycle three"),
             RuntimeError("cycle three retry"),
+            TimeoutError("cycle four"),
+            RuntimeError("cycle four retry"),
         ]
     )
     stop_event = FakeStopEvent([0.0], stop_after_waits=99)
@@ -517,8 +509,8 @@ def test_lifetime_failure_count_does_not_reset_after_success(
     )
 
     assert exit_code == 1
-    assert "(2/2 lifetime)" in capsys.readouterr().err
-    assert client.reconnect_count == 2
+    assert "(3/3 lifetime)" in capsys.readouterr().err
+    assert client.reconnect_count == 3
     assert client.close_count == 1
 
 

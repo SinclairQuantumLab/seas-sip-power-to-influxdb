@@ -67,7 +67,7 @@ cp settings.toml.template settings.toml
 ```
 
 The template already points to `192.168.50.34`. If the controller address is
-different, edit `source.host` in `settings.toml`. Then request one real device
+different, edit `host` in `settings.toml`. Then request one real device
 snapshot without opening an authentication file or writing to InfluxDB:
 
 ```powershell
@@ -90,17 +90,13 @@ states another unit.
 
 | Setting | Default | Meaning and valid values |
 | --- | ---: | --- |
-| `measurement` | `SAESSIPPower` | Nonempty InfluxDB measurement name. Changing it is a schema migration. |
 | `interval_s` | `30` | Positive interval between cycle start times. |
-| `reconnect_delay_s` | `1` | Nonnegative delay before one socket replacement and retry. |
-| `exception_threshold` | `3` | Positive cumulative unresolved-failure limit before the process exits nonzero. |
-| `source.host` | `192.168.50.34` | Controller IPv4 address or DNS name. |
-| `source.port` | `2527` | UDP port in the range 1-65535. SIP POWER documents 2527 as hard-coded. |
-| `source.timeout_s` | `3` | Positive finite timeout for each UDP response. |
+| `host` | `192.168.50.34` | Controller IPv4 address or DNS name. |
+| `port` | `2527` | Optional UDP port. Omit it to use the SIP POWER default. |
+| `timeout_s` | `3` | Timeout for each UDP response. |
 
 The relay supports one controller per process. To collect a second controller,
-run a second checkout or service with its own settings, measurement or bucket,
-and log paths.
+run a second checkout or service with its own settings, bucket, and log paths.
 
 ### InfluxDB authentication
 
@@ -126,10 +122,10 @@ overrun schedules the next cycle from the current time.
 
 The UDP socket accepts replies only from the configured peer. A source timeout,
 socket error, malformed length, wrong protocol version, or wrong response
-command causes the relay to wait `reconnect_delay_s`, replace the socket, and
-retry the read once. Only an unresolved retry or write failure increments the
-lifetime failure count. Successful cycles do not reset that count. At
-`exception_threshold`, the process exits nonzero so Supervisor can restart it.
+command causes the relay to replace the socket immediately and retry the read
+once. Only an unresolved retry or write failure increments the lifetime failure
+count. Successful cycles do not reset that count. At three lifetime failures,
+the process exits nonzero so Supervisor can restart it.
 
 SIP POWER does not include a sample timestamp in Read All. The InfluxDB point
 therefore uses the relay host's aware UTC acquisition time immediately after a
@@ -143,7 +139,7 @@ separate local measurement log is created.
 
 ## InfluxDB schema
 
-The default measurement is `SAESSIPPower`.
+The measurement is fixed as `SAESSIPPower`.
 
 Tags:
 
@@ -268,7 +264,7 @@ command, project directory, and log paths before starting the program.
 
 `timed out` or `Read All failed`:
 
-- Verify `source.host` and that the PC has a route to the controller subnet.
+- Verify `host` and that the PC has a route to the controller subnet.
 - Confirm the controller has the Ethernet option and is powered.
 - Permit outbound and return UDP traffic on port 2527 in host/network firewalls.
 - Do not test with a broadcast address; SIP POWER ignores broadcast Read All.
