@@ -1,62 +1,81 @@
 # SAES SIP POWER validation
 
-## Current live checks - 2026-08-28
+Evidence is separated below so a later agent does not treat a historical clean
+result as proof about the current dirty worktree.
+
+## Current dirty-worktree checks - 2026-08-28
+
+Base commit: `139d9a3 Align README with relay installation style`.
+
+Uncommitted application/configuration changes:
+
+- `main.py`: measurement candidate `SAESSIPPower` -> `seas-sip-power`.
+- `settings.toml.template`: placeholder host/comment changes with one trailing
+  whitespace finding.
+
+Results:
+
+- `uv run pytest -q`: 2 failed, 16 passed. The failures are
+  `test_direct_script_maps_complete_schema` and
+  `test_direct_script_loads_settings`; both expect `SAESSIPPower` while dirty
+  `main.py` emits `seas-sip-power`.
+- `uv run ruff check .`: passed.
+- `git diff --check`: failed only on trailing whitespace in the dirty settings
+  template.
+- README/code schema comparison: measurement differs; README still documents
+  committed `SAESSIPPower`.
+- Live device check: not run for this dirty state.
+- InfluxDB upload: not run.
+
+The current worktree is therefore not a verified release candidate.
+
+## Last verified committed baseline - 2026-08-28
+
+The committed baseline used measurement `SAESSIPPower`, flat settings, omitted
+port defaulting to 2527, immediate reconnect/retry, and a hard-coded
+three-failure lifetime threshold.
+
+Offline results before the later dirty edits:
+
+- `uv sync`: passed with CPython 3.11.14; `uv.lock` retained.
+- `uv run pytest -q`: 18 passed.
+- `uv run ruff check .`: passed.
+- All 44 InfluxDB field names, both tag names, measurement, timestamp mapping,
+  and all three CLI flags matched the tests and README.
+- `main.py` contained no function or class definitions.
+- The tracked `imaq-secret` gitlink used the common Sinclair submodule URL;
+  credential contents were not inspected.
+
+The suite covers direct settings loading, all protocol field groups, truncated
+and wrong-header frames, timestamps, record mapping, optional pressure,
+credential isolation, direct read/write behavior, immediate reconnect/retry,
+cumulative lifetime failure handling, cycle-start timing, writer failure, and
+cleanup.
+
+## Last live read-only evidence - 2026-08-28
 
 Environment: Windows host on the controller LAN, endpoint
 `192.168.50.34:2527`, America/Chicago.
 
-1. A PowerShell UDP transport probe sent one documented read-only Read All
-   header with a 3-second receive timeout. Result: response peer
-   `192.168.50.34:2527`, length 302, version 1, command 128.
-2. The finished direct top-level script ran with the flat local settings file;
-   `port` was omitted so the client used its 2527 default:
+1. A PowerShell UDP probe sent the documented two-byte Read All request with a
+   3-second timeout. The peer returned 302 bytes with version 1 and command 128.
+2. The clean application path ran:
 
    ```text
    uv run python main.py --settings settings.toml --once --dry-run
    ```
 
-   Result: exit 0 and one normalized `SAESSIPPower` record for serial 25040035.
-   Representative checks were hardware 2.2, software 2.0, input 24.0 V,
-   internal temperature 302 K, and returned IP 192.168.50.34. The output was
-   disabled and the Safe/Interlock alarm latches were true at that instant.
-   The command did not open credentials or write to InfluxDB.
+   It exited 0 and produced one normalized `SAESSIPPower` record for serial
+   25040035. Representative values were hardware 2.2, software 2.0, input
+   24.0 V, internal temperature 302 K, and returned IP 192.168.50.34.
 
-No raw response frame was retained and no controller state was changed.
+No raw response frame was retained, no controller state was changed, no
+credential file was opened, and nothing was uploaded to InfluxDB.
 
-## Offline and structural checks - 2026-08-28
+## Not validated
 
-- `uv sync`: passed with CPython 3.11.14; `uv.lock` retained.
-- `uv run pytest -q`: 18 passed.
-- `uv run ruff check .`: all checks passed.
-- `audit_relay.py . --strict`: all enforced findings passed. The generic audit
-  reported expected warnings for the intentionally removed reconnect-delay and
-  configurable-threshold settings; the immediate reconnect path and lifetime
-  failure counter were detected.
-- Baseline/current AST comparison: all 45 InfluxDB field/tag-to-sample mappings
-  and all three CLI flags were identical. The finished `main.py` contains no
-  function or class definitions.
-- `settings.toml` and `settings.toml.template`: text contents matched exactly,
-  including comments. The ignored deployment file and tracked template both
-  omit `port` so the default path is exercised.
-- Sinclair family style check: application configuration, IMAQ secret,
-  InfluxDB configuration, source connection, and query sections use the common
-  paired comment markers. The tracked `imaq-secret` gitlink uses the common
-  Sinclair submodule URL; credential contents were not inspected.
+- The current dirty measurement/template candidate has no live evidence.
+- InfluxDB upload requires explicit authorization and has not been run.
+- Continuous live polling has not been run.
+- Supervisor deployment has not been activated or checked on a selected host.
 
-The suite executes `main.py` as a script and covers direct settings loading,
-source framing and every field group, truncated and wrong-header frames,
-timestamps, record mapping, optional pressure, credential isolation, the direct
-read/write path, reconnect/retry, cumulative lifetime threshold, cycle-start
-timing, writer failure, and cleanup. Input-value validation tests were removed
-with the validation layer; the script trusts the local deployer-controlled TOML
-in the same style as the comparable Sinclair relays. Measurement
-`SAESSIPPower` and the three-failure threshold are fixed application constants;
-source retry has no configured delay.
-
-## Not run
-
-- InfluxDB upload: requires the authorized `imaq-secret/auth.toml` submodule
-  content and explicit operator authorization.
-- Continuous live polling: one current dry-run cycle was sufficient for the
-  read path; service operation was not started.
-- Supervisor deployment: no deployment host has been selected.

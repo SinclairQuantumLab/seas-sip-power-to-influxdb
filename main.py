@@ -26,7 +26,7 @@ print()
 
 # >>>>> app configuration >>>>>
 
-MEASUREMENT = "SAESSIPPower"
+MEASUREMENT = "seas-sip-power"
 EX_THRESHOLD = 3
 
 # >>> load & parse config files >>>

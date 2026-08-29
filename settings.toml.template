@@ -6,10 +6,8 @@
 interval_s = 30
 
 # SAES SIP POWER controller hostname or IP address.
-host = "192.168.50.34"
-
-# SIP POWER uses UDP port 2527 by default.
-# Uncomment only when a different port is required.
+# Optional port if not default value: 2527
+host = "<HOST>" # e.g. "192.168.1.20" or "seas-pump.local" 
 # port = 2527
 
 # UDP response timeout in seconds.

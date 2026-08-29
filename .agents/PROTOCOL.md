@@ -1,5 +1,11 @@
 # SAES SIP POWER protocol
 
+## Status
+
+The protocol implementation and evidence below are stable at the current
+committed baseline. The uncommitted measurement-name and settings-template
+changes recorded in `.agents/HANDOFF.md` do not alter UDP framing or parsing.
+
 ## Sources and acquisition choice
 
 - Primary source: `manuals/saes-sip_power-user_manual-rev_4.pdf`, document
