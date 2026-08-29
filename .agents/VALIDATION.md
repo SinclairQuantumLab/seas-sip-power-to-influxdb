@@ -5,8 +5,9 @@ result as proof about current HEAD.
 
 ## Current HEAD checks - 2026-08-28
 
-Current commit: `625cbe5 Refactor handoff documentation and update measurement
-name to 'seas-sip-power'`.
+Application/configuration commit under test: `625cbe5 Refactor handoff
+documentation and update measurement name to 'seas-sip-power'`. Later
+documentation-only commits do not change these results.
 
 Application/configuration changes committed there:
 

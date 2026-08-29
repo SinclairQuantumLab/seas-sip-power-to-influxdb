@@ -7,10 +7,12 @@ Last updated: 2026-08-28 (America/Chicago).
 Read root `AGENTS.md`, then `.agents/DECISIONS.md`, `.agents/VALIDATION.md`, and
 `.agents/PROTOCOL.md`. Do not inspect the contents of `imaq-secret`.
 
-## Current HEAD
+## Current repository state
 
-`HEAD` is `625cbe5 Refactor handoff documentation and update measurement name
-to 'seas-sip-power'`.
+Application/configuration state was introduced by `625cbe5 Refactor handoff
+documentation and update measurement name to 'seas-sip-power'`. Later
+documentation-only commits may be above it; use `git log -5 --oneline` for the
+exact current HEAD.
 
 That commit was created by another actor while the handoff-documentation task
 was in progress. It combined the agent-document changes with the measurement
@@ -18,7 +20,7 @@ rename and settings-template edits that had previously been unstaged. The
 working tree was clean immediately after that commit. Do not amend, reset, or
 rewrite it merely to separate those concerns.
 
-Current committed state:
+Current application/configuration state:
 
 - `main.py` emits measurement `seas-sip-power`.
 - Tests and README still expect/document `SAESSIPPower`.
