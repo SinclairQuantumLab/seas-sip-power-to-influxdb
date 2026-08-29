@@ -25,8 +25,10 @@ Current application/configuration state:
 - `main.py` emits measurement `seas-sip-power`.
 - Tests and README still expect/document `SAESSIPPower`.
 - A successful upload log shows only `Pressure[Torr]`, `OutputCurrent[nA]`,
-  `OutputVoltage[V]`, and `and more.` in that order. Missing optional pressure
-  is displayed as `None`; dry-run continues to print the complete record.
+  `OutputVoltage[V]`, and `and more.` in that order. The local record always
+  contains optional pressure, using `None` when unavailable; the pinned
+  InfluxDB client omits that field from line protocol, while logs and dry-run
+  display the `None` value.
 - `settings.toml.template` uses `<HOST>` and an inline host example, with
   trailing whitespace after that example.
 - Ignored local `settings.toml` still uses `192.168.50.34` and the earlier
@@ -60,15 +62,17 @@ boundaries are in `.agents/VALIDATION.md`.
 
 ## Reference provenance
 
-The Sinclair relay inventory was refreshed on 2026-08-28 and contained the nine
-accessible reference relays listed by the `to-influxdb-development` skill plus
-this target. The closest runtime references remain
+The Sinclair relay inventory was refreshed on 2026-08-28 and contained ten
+accessible reference relays plus this target. The closest runtime references
+remain
 `ULE-Ion-pump-to-influxdb` `main`, `LFI3751-to-influxdb` `master`, and
 `nut-to-influxdb` `main` for direct polling and immediate retry. ULE also uses
 the pressure/current/voltage log order, while NUT establishes that unavailable
 selected values may be logged as `None`. The concise README shape was adapted
-from the user's local HiCube Neo example and checked against
-`iqair-to-influxdb` `main`.
+from `hicube-neo-to-influxdb` `main` and checked against
+`iqair-to-influxdb` `main`. HiCube explicitly filters `None` fields before its
+upload, while this target deliberately leaves its sole optional value in the
+record for the pinned InfluxDB client to omit.
 
 These references are provenance, not runtime dependencies or universal
 templates. Refresh the skill corpus again for a later relay task as instructed
@@ -102,6 +106,7 @@ Checks run against the application/configuration state now committed at
   measurement assertions expecting committed `SAESSIPPower` while current
   `main.py` emits `seas-sip-power`.
 - The focused optional-pressure/upload-summary test passes and confirms that
+  the record retains `Pressure[Torr]=None`, line protocol omits that field, and
   the full record is absent from a successful-upload log.
 - `uv run ruff check .`: passed.
 - `git diff --check 139d9a3 625cbe5`: reports trailing whitespace in the

@@ -374,12 +374,12 @@ def test_direct_script_maps_complete_schema(
     assert created[0].close_count == 1
 
 
-def test_direct_script_omits_unavailable_optional_pressure(
+def test_direct_script_keeps_unavailable_pressure_as_none_in_record(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Omit unavailable pressure from upload while logging it as ``None``."""
+    """Keep pressure as ``None`` for the InfluxDB client to omit on the wire."""
 
     settings_path = write_settings(tmp_path)
     write_auth(tmp_path)
@@ -402,7 +402,11 @@ def test_direct_script_omits_unavailable_optional_pressure(
     assert exit_code == 0
     fields = namespace["fields"]
     assert isinstance(fields, dict)
-    assert "Pressure[Torr]" not in fields
+    assert fields["Pressure[Torr]"] is None
+    record = write_api.writes[0][2][0]
+    line_protocol = influxdb_client.Point.from_dict(record).to_line_protocol()
+    assert "Pressure[Torr]" not in line_protocol
+    assert "OutputCurrent[nA]=20i" in line_protocol
     output = capsys.readouterr().out
     assert (
         "Iteration 1: Uploaded: Pressure[Torr]=None, "

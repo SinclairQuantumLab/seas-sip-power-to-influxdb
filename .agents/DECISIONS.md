@@ -47,8 +47,10 @@ verified deployment contract.
   attributes to exact human-readable InfluxDB field names.
 - Read All has no source timestamp. The record uses aware UTC acquisition time
   immediately after a valid response arrives.
-- `Pressure[Torr]` is the only optional field and is omitted when conversion
-  rate is zero. `OutputPower[W]` is derived from simultaneous current/voltage.
+- `Pressure[Torr]` is the only optional field. The local record dictionary
+  always includes it; a zero conversion rate maps it to `None`, which the
+  pinned InfluxDB client omits during line-protocol serialization.
+  `OutputPower[W]` is derived from simultaneous current/voltage.
 - Renaming the measurement, tags, fields, types, or timestamp behavior is a
   coordinated InfluxDB/Grafana migration, never a formatting cleanup.
 

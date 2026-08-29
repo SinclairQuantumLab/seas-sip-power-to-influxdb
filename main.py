@@ -177,9 +177,8 @@ try:
                 "IPNetmask": sample.ip_netmask,
                 "MACAddress": sample.mac_address,
                 "OutputPower[W]": sample.output_power_w,
+                "Pressure[Torr]": sample.pressure_torr,
             }
-            if sample.pressure_torr is not None:
-                fields["Pressure[Torr]"] = sample.pressure_torr
 
             influxdb_record = {
                 "measurement": MEASUREMENT,
@@ -204,7 +203,7 @@ try:
                 )
                 log(
                     f"{msg_il}Uploaded: "
-                    f"Pressure[Torr]={fields.get('Pressure[Torr]')!r}, "
+                    f"Pressure[Torr]={fields['Pressure[Torr]']!r}, "
                     f"OutputCurrent[nA]={fields['OutputCurrent[nA]']!r}, "
                     f"OutputVoltage[V]={fields['OutputVoltage[V]']!r}, and more."
                 )

@@ -19,8 +19,9 @@ Schema/configuration changes committed there:
 Current upload-log change:
 
 - `main.py`: successful uploads log pressure, output current, output voltage,
-  and `and more.` instead of the complete record. Optional pressure displays as
-  `None` while remaining absent from the uploaded fields.
+  and `and more.` instead of the complete record. The record dictionary retains
+  optional pressure as `None`; the pinned InfluxDB client omits that field from
+  serialized line protocol.
 
 Results:
 
@@ -30,7 +31,8 @@ Results:
   `main.py` emits `seas-sip-power`.
 - Focused optional-pressure/upload-summary test: passed. It used synthetic
   source and InfluxDB doubles, verified the exact selected-value order and
-  `None`, and confirmed that the full record is not logged after upload.
+  `None`, confirmed the record retains the key while line protocol omits it,
+  and confirmed that the full record is not logged after upload.
 - `uv run ruff check .`: passed.
 - `git diff --check 139d9a3 625cbe5`: failed only on trailing whitespace in the
   committed settings template.
