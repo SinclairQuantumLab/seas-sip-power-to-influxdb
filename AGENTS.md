@@ -46,7 +46,7 @@ Before editing anything:
 - Startup wrappers execute the prepared `.venv` interpreter and must not run
   dependency resolution during a restart.
 
-## Committed runtime contract
+## Runtime contract and active migration
 
 Unless the user explicitly requests a migration:
 
@@ -54,9 +54,12 @@ Unless the user explicitly requests a migration:
 - Settings are flat: `interval_s`, `host`, optional `port`, and `timeout_s`.
   Omitted `port` uses `DEFAULT_PORT` 2527. Do not add a `[source]` section,
   configurable measurement, reconnect delay, or exception-threshold setting.
-- The committed measurement is `SAESSIPPower`. Exact tags, field names, field
-  types, and aware UTC acquisition timestamp semantics are compatibility
-  surfaces for InfluxDB, Grafana dashboards, alerts, and queries.
+- The last fully verified measurement was `SAESSIPPower` at commit `139d9a3`.
+  Commit `625cbe5` changed `main.py` to `seas-sip-power` without updating tests
+  or README. Treat that rename as an incomplete active schema migration and do
+  not upload or deploy it until its scope is explicitly resolved. Exact tags,
+  field names, field types, and aware UTC acquisition timestamp semantics remain
+  compatibility surfaces for InfluxDB, Grafana dashboards, alerts, and queries.
 - One source failure replaces the socket immediately and retries once. There is
   no configured delay. An unresolved cycle increments one lifetime counter;
   success does not reset it, and the hard-coded third failure exits nonzero.
@@ -105,4 +108,3 @@ Unless the user explicitly requests a migration:
 - Make focused Git commits at meaningful checkpoints and before material or
   difficult-to-reverse work. Exclude unrelated user/agent changes from the
   commit and report anything intentionally left uncommitted.
-

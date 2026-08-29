@@ -1,15 +1,17 @@
 # SAES SIP POWER validation
 
 Evidence is separated below so a later agent does not treat a historical clean
-result as proof about the current dirty worktree.
+result as proof about current HEAD.
 
-## Current dirty-worktree checks - 2026-08-28
+## Current HEAD checks - 2026-08-28
 
-Base commit: `139d9a3 Align README with relay installation style`.
+Current commit: `625cbe5 Refactor handoff documentation and update measurement
+name to 'seas-sip-power'`.
 
-Uncommitted application/configuration changes:
+Application/configuration changes committed there:
 
-- `main.py`: measurement candidate `SAESSIPPower` -> `seas-sip-power`.
+- `main.py`: incomplete measurement migration `SAESSIPPower` ->
+  `seas-sip-power`.
 - `settings.toml.template`: placeholder host/comment changes with one trailing
   whitespace finding.
 
@@ -17,17 +19,18 @@ Results:
 
 - `uv run pytest -q`: 2 failed, 16 passed. The failures are
   `test_direct_script_maps_complete_schema` and
-  `test_direct_script_loads_settings`; both expect `SAESSIPPower` while dirty
+  `test_direct_script_loads_settings`; both expect `SAESSIPPower` while current
   `main.py` emits `seas-sip-power`.
 - `uv run ruff check .`: passed.
-- `git diff --check`: failed only on trailing whitespace in the dirty settings
-  template.
+- `git diff --check 139d9a3 625cbe5`: failed only on trailing whitespace in the
+  committed settings template.
 - README/code schema comparison: measurement differs; README still documents
   committed `SAESSIPPower`.
-- Live device check: not run for this dirty state.
+- Live device check: not run for current HEAD.
 - InfluxDB upload: not run.
 
-The current worktree is therefore not a verified release candidate.
+Current HEAD is therefore not a verified release candidate even when its
+working tree is clean.
 
 ## Last verified committed baseline - 2026-08-28
 
@@ -35,7 +38,7 @@ The committed baseline used measurement `SAESSIPPower`, flat settings, omitted
 port defaulting to 2527, immediate reconnect/retry, and a hard-coded
 three-failure lifetime threshold.
 
-Offline results before the later dirty edits:
+Offline results before the later migration/template changes:
 
 - `uv sync`: passed with CPython 3.11.14; `uv.lock` retained.
 - `uv run pytest -q`: 18 passed.
@@ -74,8 +77,7 @@ credential file was opened, and nothing was uploaded to InfluxDB.
 
 ## Not validated
 
-- The current dirty measurement/template candidate has no live evidence.
+- The current committed measurement/template migration has no live evidence.
 - InfluxDB upload requires explicit authorization and has not been run.
 - Continuous live polling has not been run.
 - Supervisor deployment has not been activated or checked on a selected host.
-

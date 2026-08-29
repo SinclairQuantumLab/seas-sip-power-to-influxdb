@@ -7,9 +7,32 @@ Last updated: 2026-08-28 (America/Chicago).
 Read root `AGENTS.md`, then `.agents/DECISIONS.md`, `.agents/VALIDATION.md`, and
 `.agents/PROTOCOL.md`. Do not inspect the contents of `imaq-secret`.
 
-## Committed baseline
+## Current HEAD
 
-`HEAD` is `139d9a3 Align README with relay installation style`.
+`HEAD` is `625cbe5 Refactor handoff documentation and update measurement name
+to 'seas-sip-power'`.
+
+That commit was created by another actor while the handoff-documentation task
+was in progress. It combined the agent-document changes with the measurement
+rename and settings-template edits that had previously been unstaged. The
+working tree was clean immediately after that commit. Do not amend, reset, or
+rewrite it merely to separate those concerns.
+
+Current committed state:
+
+- `main.py` emits measurement `seas-sip-power`.
+- Tests and README still expect/document `SAESSIPPower`.
+- `settings.toml.template` uses `<HOST>` and an inline host example, with
+  trailing whitespace after that example.
+- Ignored local `settings.toml` still uses `192.168.50.34` and the earlier
+  comment layout.
+- Tests fail because the measurement migration is incomplete; current HEAD is
+  not ready for upload or deployment.
+
+## Last fully verified baseline
+
+`139d9a3 Align README with relay installation style` is the last fully verified
+baseline.
 
 At that commit the repository is a completed read-only, synchronous snapshot
 relay for one SAES SIP POWER over Ethernet UDP:
@@ -43,10 +66,10 @@ These references are provenance, not runtime dependencies or universal
 templates. Refresh the skill corpus again for a later relay task as instructed
 by the skill.
 
-## Current uncommitted worktree: preserve it
+## Changes introduced by `625cbe5`
 
-Two pre-existing, unstaged changes are present and were not created, completed,
-staged, or committed by the handoff-documentation work:
+Two application/configuration changes were committed together with the initial
+handoff-document refresh:
 
 1. `main.py` changes `MEASUREMENT` from committed `SAESSIPPower` to
    `seas-sip-power`.
@@ -55,42 +78,47 @@ staged, or committed by the handoff-documentation work:
    after the host example.
 
 The ignored local `settings.toml` still contains `host = "192.168.50.34"` and
-the earlier comments. It therefore no longer mirrors the edited template's
+the earlier comments. It therefore no longer mirrors the committed template's
 comment/order shape.
 
-Do not discard or silently finish these changes. Their author and final intent
-have not been established in this handoff task.
+Do not silently revert or deploy these changes. The commit message supports an
+intent to rename the measurement, but the required schema-migration scope was
+not completed or validated.
 
 ## Current verification state
 
-Checks run on the dirty worktree on 2026-08-28:
+Checks run against the application/configuration state now committed at
+`625cbe5` on 2026-08-28:
 
 - `uv run pytest -q`: **2 failed, 16 passed**. Both failures are exact
   measurement assertions expecting committed `SAESSIPPower` while current
   `main.py` emits `seas-sip-power`.
 - `uv run ruff check .`: passed.
-- `git diff --check`: reports trailing whitespace in the edited
-  `settings.toml.template` host line.
-- README still documents `SAESSIPPower`, so it disagrees with dirty `main.py`.
-- No live device read or InfluxDB upload was performed for the dirty state.
+- `git diff --check 139d9a3 625cbe5`: reports trailing whitespace in the
+  committed `settings.toml.template` host line.
+- README still documents `SAESSIPPower`, so it disagrees with current
+  `main.py`.
+- No live device read or InfluxDB upload was performed for this migrated state.
 
 These failures are not defects in the last committed baseline; they expose an
-unfinished schema-migration candidate in the worktree.
+unfinished schema migration in current HEAD.
 
 ## Decision required before implementation
 
-Determine from the user whether `seas-sip-power` is an intentional measurement
-migration. Do not infer intent from the newer general Spinal-Case preference:
-the existing measurement is a deployed compatibility surface.
+Confirm whether `seas-sip-power` should be completed as an intentional
+measurement migration. The commit message suggests that direction, but it does
+not by itself authorize affected Grafana/dashboard/history changes. Do not infer
+the full migration scope only from the newer general Spinal-Case preference:
+the previous measurement is a deployed compatibility surface.
 
 If the rename is intentional, the same migration must deliberately cover tests,
 README schema/validation wording, Grafana dashboards, alerts, queries, and
 deployment expectations. Record what was migrated and whether existing history
 must remain queryable.
 
-If the rename is not intentional, restore only that specific pre-existing diff
-after obtaining user direction; do not use a broad reset or overwrite the
-settings-template work.
+If the rename is not intentional, revert it in a new focused commit after
+obtaining user direction; do not rewrite `625cbe5`, use a broad reset, or
+overwrite the settings-template work.
 
 Separately confirm the desired template comments and example host. Keep
 `settings.toml.template` and ignored `settings.toml` aligned in structure and
@@ -98,7 +126,7 @@ comments while allowing their host values to differ.
 
 ## Recommended continuation order
 
-1. Inspect `git status`, the two dirty diffs, and this handoff again.
+1. Inspect `git status`, `625cbe5`, and this handoff again.
 2. Resolve the measurement-migration intent with the user.
 3. Resolve the settings-template comment/placeholder intent without losing the
    existing local controller value.

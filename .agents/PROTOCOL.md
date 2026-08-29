@@ -2,9 +2,9 @@
 
 ## Status
 
-The protocol implementation and evidence below are stable at the current
-committed baseline. The uncommitted measurement-name and settings-template
-changes recorded in `.agents/HANDOFF.md` do not alter UDP framing or parsing.
+The protocol implementation and evidence below remain stable. The measurement
+and settings-template changes committed in `625cbe5` do not alter UDP framing
+or parsing, although that commit is not a verified application release.
 
 ## Sources and acquisition choice
 

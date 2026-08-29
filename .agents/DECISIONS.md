@@ -1,8 +1,9 @@
 # seas-pump-to-influxdb durable decisions
 
 These are accepted repository decisions, not suggestions from a generic relay
-template. Current uncommitted candidates are listed separately in
-`.agents/HANDOFF.md` and do not become decisions merely by appearing in a diff.
+template. The incomplete migration committed in `625cbe5` is listed separately
+in `.agents/HANDOFF.md`; a commit does not make an unfinished migration a
+verified deployment contract.
 
 ## Application shape
 
@@ -37,7 +38,10 @@ template. Current uncommitted candidates are listed separately in
 
 ## InfluxDB compatibility
 
-- Committed measurement: `SAESSIPPower`.
+- Last fully verified/deployed-contract measurement: `SAESSIPPower` at
+  `139d9a3`.
+- Current HEAD emits `seas-sip-power` after `625cbe5`, but tests and README have
+  not migrated and no current live/upload evidence exists.
 - Committed tags: `source` and `Serial number`.
 - `main.py` is the only boundary that maps normalized `snake_case` sample
   attributes to exact human-readable InfluxDB field names.
@@ -61,9 +65,8 @@ template. Current uncommitted candidates are listed separately in
 
 ## Explicitly unresolved
 
-- The dirty `seas-sip-power` measurement name is only a migration candidate.
-  It conflicts with the committed contract, tests, and README until the user
-  explicitly decides the migration scope.
-- The dirty settings-template placeholder/comment change is not yet reconciled
-  with ignored local `settings.toml`.
-
+- The committed `seas-sip-power` measurement migration is incomplete. It
+  conflicts with tests and README until the user confirms and the full migration
+  scope is implemented, or until it is reverted in a later focused commit.
+- The committed settings-template placeholder/comment change is not yet
+  reconciled with ignored local `settings.toml` and contains trailing whitespace.
