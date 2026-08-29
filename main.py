@@ -202,7 +202,12 @@ try:
                     org=INFLUXDB_ORG,
                     record=influxdb_records,
                 )
-                log(msg_il + f"Uploaded {influxdb_records!r}")
+                log(
+                    f"{msg_il}Uploaded: "
+                    f"Pressure[Torr]={fields.get('Pressure[Torr]')!r}, "
+                    f"OutputCurrent[nA]={fields['OutputCurrent[nA]']!r}, "
+                    f"OutputVoltage[V]={fields['OutputVoltage[V]']!r}, and more."
+                )
         except Exception as ex:
             # A one-shot command has no later cycle in which to recover.
             if ARGS.once:

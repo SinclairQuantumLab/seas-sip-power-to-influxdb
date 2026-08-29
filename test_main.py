@@ -375,22 +375,41 @@ def test_direct_script_maps_complete_schema(
 
 
 def test_direct_script_omits_unavailable_optional_pressure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Omit rather than fabricate pressure when conversion is unavailable."""
+    """Omit unavailable pressure from upload while logging it as ``None``."""
 
     settings_path = write_settings(tmp_path)
+    write_auth(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    write_api = FakeWriteAPI()
     use_fake_source(monkeypatch, FakeClient([sample(pressure_torr=None)]))
+
+    def influx_factory(**options: str) -> FakeInfluxClient:
+        """Create a fake client for the optional-pressure upload."""
+
+        return FakeInfluxClient(write_api, options)
+
+    monkeypatch.setattr(influxdb_client, "InfluxDBClient", influx_factory)
 
     exit_code, namespace = run_script(
         monkeypatch,
-        ["--settings", str(settings_path), "--once", "--dry-run"],
+        ["--settings", str(settings_path), "--once"],
     )
 
     assert exit_code == 0
     fields = namespace["fields"]
     assert isinstance(fields, dict)
     assert "Pressure[Torr]" not in fields
+    output = capsys.readouterr().out
+    assert (
+        "Iteration 1: Uploaded: Pressure[Torr]=None, "
+        "OutputCurrent[nA]=20, OutputVoltage[V]=5000, and more."
+        in output
+    )
+    assert "HasEthernet" not in output
 
 
 def test_direct_script_loads_settings(

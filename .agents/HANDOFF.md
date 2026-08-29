@@ -9,10 +9,10 @@ Read root `AGENTS.md`, then `.agents/DECISIONS.md`, `.agents/VALIDATION.md`, and
 
 ## Current repository state
 
-Application/configuration state was introduced by `625cbe5 Refactor handoff
+Measurement/configuration state was introduced by `625cbe5 Refactor handoff
 documentation and update measurement name to 'seas-sip-power'`. Later
-documentation-only commits may be above it; use `git log -5 --oneline` for the
-exact current HEAD.
+documentation and upload-log commits may be above it; use
+`git log -5 --oneline` for the exact current HEAD.
 
 That commit was created by another actor while the handoff-documentation task
 was in progress. It combined the agent-document changes with the measurement
@@ -24,6 +24,9 @@ Current application/configuration state:
 
 - `main.py` emits measurement `seas-sip-power`.
 - Tests and README still expect/document `SAESSIPPower`.
+- A successful upload log shows only `Pressure[Torr]`, `OutputCurrent[nA]`,
+  `OutputVoltage[V]`, and `and more.` in that order. Missing optional pressure
+  is displayed as `None`; dry-run continues to print the complete record.
 - `settings.toml.template` uses `<HOST>` and an inline host example, with
   trailing whitespace after that example.
 - Ignored local `settings.toml` still uses `192.168.50.34` and the earlier
@@ -57,12 +60,15 @@ boundaries are in `.agents/VALIDATION.md`.
 
 ## Reference provenance
 
-The Sinclair relay inventory was refreshed on 2026-08-28 and still contained
-nine accessible relay repositories listed by the `to-influxdb-development`
-skill. The closest runtime references remain `ULE-Ion-pump-to-influxdb` `main`,
-`LFI3751-to-influxdb` `master`, and `nut-to-influxdb` `main` for direct polling
-and immediate retry. The concise README shape was adapted from the user's local
-HiCube Neo example and checked against `iqair-to-influxdb` `main`.
+The Sinclair relay inventory was refreshed on 2026-08-28 and contained the nine
+accessible reference relays listed by the `to-influxdb-development` skill plus
+this target. The closest runtime references remain
+`ULE-Ion-pump-to-influxdb` `main`, `LFI3751-to-influxdb` `master`, and
+`nut-to-influxdb` `main` for direct polling and immediate retry. ULE also uses
+the pressure/current/voltage log order, while NUT establishes that unavailable
+selected values may be logged as `None`. The concise README shape was adapted
+from the user's local HiCube Neo example and checked against
+`iqair-to-influxdb` `main`.
 
 These references are provenance, not runtime dependencies or universal
 templates. Refresh the skill corpus again for a later relay task as instructed
@@ -95,6 +101,8 @@ Checks run against the application/configuration state now committed at
 - `uv run pytest -q`: **2 failed, 16 passed**. Both failures are exact
   measurement assertions expecting committed `SAESSIPPower` while current
   `main.py` emits `seas-sip-power`.
+- The focused optional-pressure/upload-summary test passes and confirms that
+  the full record is absent from a successful-upload log.
 - `uv run ruff check .`: passed.
 - `git diff --check 139d9a3 625cbe5`: reports trailing whitespace in the
   committed `settings.toml.template` host line.

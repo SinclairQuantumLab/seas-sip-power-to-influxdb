@@ -5,16 +5,22 @@ result as proof about current HEAD.
 
 ## Current HEAD checks - 2026-08-28
 
-Application/configuration commit under test: `625cbe5 Refactor handoff
-documentation and update measurement name to 'seas-sip-power'`. Later
-documentation-only commits do not change these results.
+Schema/configuration commit under test: `625cbe5 Refactor handoff documentation
+and update measurement name to 'seas-sip-power'`. Later documentation and
+upload-log changes do not resolve its migration results.
 
-Application/configuration changes committed there:
+Schema/configuration changes committed there:
 
 - `main.py`: incomplete measurement migration `SAESSIPPower` ->
   `seas-sip-power`.
 - `settings.toml.template`: placeholder host/comment changes with one trailing
   whitespace finding.
+
+Current upload-log change:
+
+- `main.py`: successful uploads log pressure, output current, output voltage,
+  and `and more.` instead of the complete record. Optional pressure displays as
+  `None` while remaining absent from the uploaded fields.
 
 Results:
 
@@ -22,6 +28,9 @@ Results:
   `test_direct_script_maps_complete_schema` and
   `test_direct_script_loads_settings`; both expect `SAESSIPPower` while current
   `main.py` emits `seas-sip-power`.
+- Focused optional-pressure/upload-summary test: passed. It used synthetic
+  source and InfluxDB doubles, verified the exact selected-value order and
+  `None`, and confirmed that the full record is not logged after upload.
 - `uv run ruff check .`: passed.
 - `git diff --check 139d9a3 625cbe5`: failed only on trailing whitespace in the
   committed settings template.

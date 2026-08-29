@@ -58,6 +58,10 @@ verified deployment contract.
 - Startup wrappers run the prepared `.venv` interpreter and do not resolve
   dependencies during restart.
 - Supervisor owns stdout/stderr logs. No separate local measurement log exists.
+- After a successful upload, stdout summarizes `Pressure[Torr]`,
+  `OutputCurrent[nA]`, and `OutputVoltage[V]` in that order, followed by
+  `and more.`. Unavailable pressure is shown as `None`; dry-run keeps the full
+  record representation for pre-upload review.
 - README uses the concise Sinclair relay installation/usage style established
   in commit `139d9a3`, including the recursive-submodule note and numbered
   installation/usage steps.
