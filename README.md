@@ -1,4 +1,4 @@
-# seas-pump-to-influxdb
+# seas-sip-power-to-influxdb
 
 Read one SAES SIP POWER ion-pump controller through its Ethernet UDP interface
 and relay each controller-wide snapshot to InfluxDB for Grafana. Device access
@@ -17,8 +17,8 @@ controller state or settings.
 
     ```bash
     cd "$HOME/Projects"
-    git clone --recurse-submodules https://github.com/SinclairQuantumLab/seas-pump-to-influxdb.git
-    cd seas-pump-to-influxdb
+    git clone --recurse-submodules https://github.com/SinclairQuantumLab/seas-sip-power-to-influxdb.git
+    cd seas-sip-power-to-influxdb
     ```
 
     > **NOTE**: the `--recurse-submodules` option clones [`imaq-secret`](https://github.com/SinclairQuantumLab/imaq-secret.git) repo for the credential to access to our InfluxDB together at the right location in this repo.
@@ -48,6 +48,11 @@ controller state or settings.
 
 4. Optional: to register the app with Supervisor, use the appropriate template
    in the `supervisor` folder for the operating system.
+
+   When moving an existing checkout to the new repository name, update its
+   Git remote and Supervisor command/directory paths to
+   `seas-sip-power-to-influxdb`, then run `uv sync` in the new directory.
+   The InfluxDB measurement remains `seas-sip-power`.
 
 ## Usage
 

@@ -1,7 +1,7 @@
 ; Copy into the Windows Supervisor conf.d directory after replacing paths if needed.
-[program:seas-pump-to-influxdb]
-command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%(ENV_USERPROFILE)s\Projects\seas-pump-to-influxdb\Startup.ps1"
-directory="%(ENV_USERPROFILE)s\Projects\seas-pump-to-influxdb"
+[program:seas-sip-power-to-influxdb]
+command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%(ENV_USERPROFILE)s\Projects\seas-sip-power-to-influxdb\Startup.ps1"
+directory="%(ENV_USERPROFILE)s\Projects\seas-sip-power-to-influxdb"
 process_name=%(program_name)s
 autostart=true
 startsecs=5

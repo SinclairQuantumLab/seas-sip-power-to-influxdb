@@ -6,6 +6,23 @@ relay is unused.
 
 ## Current alignment checks - 2026-09-15
 
+### Repository rename checks - 2026-09-15
+
+The rename changes project metadata, documentation, and Supervisor template
+paths, without changing runtime code or the `seas-sip-power` measurement.
+`uv sync` and Ruff passed. The existing 18 tests passed under Python 3.11.14
+in an isolated temporary snapshot containing the current runtime, Supervisor
+helpers, project metadata, and committed root tests. The first incomplete
+snapshot omitted the Supervisor helpers; that setup error was corrected.
+
+In the actual worktree, the user's pre-existing move of both tests into
+`.agents/` makes `uv run pytest -q` report no tests collected (exit 5).
+The moved files are byte-identical to their committed versions; the move and
+its test-discovery/path follow-up are excluded from the rename commit.
+No controller access, upload, or Supervisor restart was performed.
+
+### Measurement alignment
+
 Starting commit: `595fd37`, the user's merge of remote `eedb35c` and local
 handoff notes. The following results apply to that runtime plus the test and
 documentation alignment recorded in the same commit as this document:

@@ -1,1 +1,1 @@
-"""Supervisor launch and logging support for seas-pump-to-influxdb."""
+"""Supervisor launch and logging support for seas-sip-power-to-influxdb."""

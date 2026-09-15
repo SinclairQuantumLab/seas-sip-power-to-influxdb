@@ -1,4 +1,4 @@
-# seas-pump-to-influxdb handoff
+# seas-sip-power-to-influxdb handoff
 
 Last updated: 2026-09-15 (America/Chicago).
 
@@ -8,6 +8,28 @@ Read root `AGENTS.md`, then `.agents/DECISIONS.md`, `.agents/VALIDATION.md`, and
 `.agents/PROTOCOL.md`. Do not inspect the contents of `imaq-secret`.
 
 ## Current state
+
+The user requested the repository and local directory name
+`seas-sip-power-to-influxdb` on 2026-09-15 and renamed the GitHub repository.
+Package metadata, installation commands, and Supervisor templates now use
+that name. The runtime client and InfluxDB measurement remain unchanged.
+
+The checkout now resides at
+`C:\Users\Joon\Projects\seas-sip-power-to-influxdb`; origin uses the matching
+GitHub URL. Windows prevented renaming the open original directory, so all
+contents were moved into the new directory instead. Only the empty old
+directory and its empty `.git` directory remain. The new checkout, submodule,
+`uv sync`, CLI help, and Ruff were verified after the move.
+
+Codex trusted-project configuration was updated and `codex app` opened the new
+workspace. This active thread still carries its original working directory;
+use the new workspace for subsequent work. No Codex database or conversation
+history was manually rewritten.
+
+The user also moved the two root test files into `.agents/` without changing
+their contents. Those moves are preserved and excluded from the rename commit.
+Plain pytest no longer discovers them, and the moved script test still assumes
+`main.py` is beside it. Completing that test-layout change remains separate work.
 
 The user confirmed on 2026-09-15 that real data is already uploaded to
 `seas-sip-power` and requested alignment of stale tests and documentation.

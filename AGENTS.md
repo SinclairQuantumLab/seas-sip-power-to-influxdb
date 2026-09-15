@@ -1,4 +1,4 @@
-# seas-pump-to-influxdb Agent Instructions
+# seas-sip-power-to-influxdb Agent Instructions
 
 ## Goal
 

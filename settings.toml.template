@@ -1,4 +1,4 @@
-# Settings configuration file for seas-pump-to-influxdb app
+# Settings configuration file for seas-sip-power-to-influxdb app
 # Copy this file, remove `.template` extension, and setup the below.
 # See README.md for detail.
 

@@ -1,4 +1,4 @@
-# seas-pump-to-influxdb durable decisions
+# seas-sip-power-to-influxdb durable decisions
 
 These are accepted repository decisions, not suggestions from a generic relay
 template. The user confirmed the operational measurement on 2026-09-15;

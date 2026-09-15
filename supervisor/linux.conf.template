@@ -1,7 +1,7 @@
 ; Copy into /etc/supervisor/conf.d after replacing USERNAME.
-[program:seas-pump-to-influxdb]
-command=/usr/bin/env bash /home/USERNAME/Projects/seas-pump-to-influxdb/Startup.sh
-directory=/home/USERNAME/Projects/seas-pump-to-influxdb
+[program:seas-sip-power-to-influxdb]
+command=/usr/bin/env bash /home/USERNAME/Projects/seas-sip-power-to-influxdb/Startup.sh
+directory=/home/USERNAME/Projects/seas-sip-power-to-influxdb
 user=USERNAME
 autostart=true
 startsecs=5
@@ -9,9 +9,9 @@ startretries=5
 autorestart=unexpected
 stopasgroup=true
 killasgroup=true
-stdout_logfile=/var/log/supervisor/seas-pump-to-influxdb_out.log
+stdout_logfile=/var/log/supervisor/seas-sip-power-to-influxdb_out.log
 stdout_logfile_maxbytes=2MB
 stdout_logfile_backups=2
-stderr_logfile=/var/log/supervisor/seas-pump-to-influxdb_err.log
+stderr_logfile=/var/log/supervisor/seas-sip-power-to-influxdb_err.log
 stderr_logfile_maxbytes=5MB
 stderr_logfile_backups=2
