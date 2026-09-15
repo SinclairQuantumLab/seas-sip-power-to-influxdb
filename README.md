@@ -93,7 +93,7 @@ Each successful Read All response becomes one point with this fixed schema:
 
 | Kind | Exact InfluxDB name | Type or value |
 | --- | --- | --- |
-| Measurement | `SAESSIPPower` | fixed |
+| Measurement | `seas-sip-power` | fixed |
 | Tag | `source` | `SAES SIP POWER` |
 | Tag | `Serial number` | controller serial number |
 | Field | `HasEthernet` | boolean |
@@ -143,8 +143,9 @@ Each successful Read All response becomes one point with this fixed schema:
 
 The point timestamp is the relay computer's aware UTC time immediately after a
 valid response arrives. `OutputPower[W]` is calculated from the simultaneously
-reported output current and voltage. `Pressure[Torr]` is omitted when the
-controller reports a zero conversion rate. A truncated or malformed response
+reported output current and voltage. When the controller reports a zero
+conversion rate, `Pressure[Torr]` appears as `None` in dry-run output and logs
+and is omitted from the InfluxDB point. A truncated or malformed response
 rejects the whole snapshot instead of writing a partial point.
 
 ## Troubleshooting
@@ -164,15 +165,18 @@ rejects the whole snapshot instead of writing a partial point.
 
 ## Validation status
 
-Read-only dry-run checks succeeded against the controller at
-`192.168.50.34:2527` on 2026-08-28. The app parsed a 302-byte Read All response
-for serial 25040035 and built the documented `SAESSIPPower` record without
-loading credentials or uploading data.
+On 2026-09-15, the operator confirmed that real data is being uploaded to
+`seas-sip-power`. Tests and documentation now use that operational name.
 
-The offline suite contains 18 passing tests covering protocol parsing,
-malformed responses, schema mapping, optional pressure, dry-run credential
-isolation, reconnect and retry, cumulative failure handling, timing, and
-cleanup. InfluxDB upload and Supervisor activation have not been validated.
+The latest recorded read-only device check was on 2026-08-28 against
+`192.168.50.34:2527`: a 302-byte response for serial 25040035 was parsed
+successfully. That check used the former measurement name `SAESSIPPower`.
+
+All 18 offline tests and Ruff passed on 2026-09-15. The tests cover protocol
+parsing, malformed responses, schema mapping, optional pressure, dry-run
+credential isolation, reconnect and retry, cumulative failure handling,
+timing, and cleanup. This documentation update did not perform a new live
+device check, query stored InfluxDB data, or verify Supervisor deployment.
 
 ## Developer's note
 

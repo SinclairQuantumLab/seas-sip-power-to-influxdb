@@ -2,9 +2,10 @@
 
 ## Status
 
-The protocol implementation and evidence below remain stable. The measurement
-and settings-template changes committed in `625cbe5` do not alter UDP framing
-or parsing, although that commit is not a verified application release.
+The protocol implementation and historical device evidence below remain stable.
+The operational measurement is `seas-sip-power`, confirmed by the user on
+2026-09-15. Aligning its tests and documentation does not change UDP framing
+or parsing; see `VALIDATION.md` for current evidence boundaries.
 
 ## Sources and acquisition choice
 

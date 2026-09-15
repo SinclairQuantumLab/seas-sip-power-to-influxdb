@@ -356,7 +356,7 @@ def test_direct_script_maps_complete_schema(
         "org": "lab",
         "bucket": "devices",
     }
-    assert record["measurement"] == "SAESSIPPower"
+    assert record["measurement"] == "seas-sip-power"
     assert record["tags"] == {
         "source": "SAES SIP POWER",
         "Serial number": "123456",
@@ -432,7 +432,7 @@ def test_direct_script_loads_settings(
     assert exit_code == 0
     assert captured == [SAESSIPPowerSettings("192.168.50.34", 2527, 3.0)]
     assert namespace["INTERVAL_s"] == 30
-    assert namespace["MEASUREMENT"] == "SAESSIPPower"
+    assert namespace["MEASUREMENT"] == "seas-sip-power"
     assert namespace["EX_THRESHOLD"] == 3
 
 

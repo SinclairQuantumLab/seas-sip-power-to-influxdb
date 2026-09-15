@@ -46,7 +46,7 @@ Before editing anything:
 - Startup wrappers execute the prepared `.venv` interpreter and must not run
   dependency resolution during a restart.
 
-## Runtime contract and active migration
+## Runtime contract
 
 Unless the user explicitly requests a migration:
 
@@ -54,12 +54,13 @@ Unless the user explicitly requests a migration:
 - Settings are flat: `interval_s`, `host`, optional `port`, and `timeout_s`.
   Omitted `port` uses `DEFAULT_PORT` 2527. Do not add a `[source]` section,
   configurable measurement, reconnect delay, or exception-threshold setting.
-- The last fully verified measurement was `SAESSIPPower` at commit `139d9a3`.
-  Commit `625cbe5` changed `main.py` to `seas-sip-power` without updating tests
-  or README. Treat that rename as an incomplete active schema migration and do
-  not upload or deploy it until its scope is explicitly resolved. Exact tags,
-  field names, field types, and aware UTC acquisition timestamp semantics remain
-  compatibility surfaces for InfluxDB, Grafana dashboards, alerts, and queries.
+- The operational measurement is `seas-sip-power`. On 2026-09-15 the user
+  confirmed that real data is already uploaded under this name and requested
+  that stale tests and documentation be aligned with it. `SAESSIPPower` was
+  the historical name before `625cbe5`; do not restore it during maintenance.
+  Exact tags, field names, field types, and aware UTC acquisition timestamp
+  semantics remain compatibility surfaces for InfluxDB, Grafana dashboards,
+  alerts, and queries.
 - One source failure replaces the socket immediately and retries once. There is
   no configured delay. An unresolved cycle increments one lifetime counter;
   success does not reset it, and the hard-coded third failure exits nonzero.

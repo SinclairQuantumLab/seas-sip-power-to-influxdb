@@ -1,73 +1,68 @@
 # SAES SIP POWER validation
 
-Evidence is separated below so a later agent does not treat a historical clean
-result as proof about current HEAD.
+Evidence below separates current offline checks, operator-confirmed operation,
+and historical live reads. Lack of an agent-run check is not evidence that the
+relay is unused.
 
-## Current HEAD checks - 2026-08-28
+## Current alignment checks - 2026-09-15
 
-Schema/configuration commit under test: `625cbe5 Refactor handoff documentation
-and update measurement name to 'seas-sip-power'`. Later documentation and
-upload-log changes do not resolve its migration results.
+Starting commit: `595fd37`, the user's merge of remote `eedb35c` and local
+handoff notes. The following results apply to that runtime plus the test and
+documentation alignment recorded in the same commit as this document:
 
-Schema/configuration changes committed there:
-
-- `main.py`: incomplete measurement migration `SAESSIPPower` ->
-  `seas-sip-power`.
-- `settings.toml.template`: placeholder host/comment changes with one trailing
-  whitespace finding.
-
-Current upload-log change:
-
-- `main.py`: successful uploads log pressure, output current, output voltage,
-  and `and more.` instead of the complete record. The record dictionary retains
-  optional pressure as `None`; the pinned InfluxDB client omits that field from
-  serialized line protocol.
-
-Results:
-
-- `uv run pytest -q`: 2 failed, 16 passed. The failures are
-  `test_direct_script_maps_complete_schema` and
-  `test_direct_script_loads_settings`; both expect `SAESSIPPower` while current
-  `main.py` emits `seas-sip-power`.
-- Focused optional-pressure/upload-summary test: passed. It used synthetic
-  source and InfluxDB doubles, verified the exact selected-value order and
-  `None`, confirmed the record retains the key while line protocol omits it,
-  and confirmed that the full record is not logged after upload.
+- Before changes: `uv run pytest -q` reported 16 passed, 2 failed. Both failures
+  expected historical `SAESSIPPower` while the runtime emitted `seas-sip-power`.
+- After updating the two expectations: `uv run pytest -q` passed all 18 tests.
 - `uv run ruff check .`: passed.
-- `git diff --check 139d9a3 625cbe5`: failed only on trailing whitespace in the
-  committed settings template.
-- README/code schema comparison: measurement differs; README still documents
-  committed `SAESSIPPower`.
-- Live device check: not run for current HEAD.
-- InfluxDB upload: not run.
+- Scoped `git diff --check` for the changed tests and documents: passed.
+- README/schema comparison: operational measurement `seas-sip-power`, both
+  tags, all 44 field names/types, UTC timestamp policy, and all three CLI flags
+  match the runtime. Optional pressure is retained as `None` locally and omitted
+  from InfluxDB line protocol, as verified by the existing test.
+- Runtime code, source protocol, settings, startup wrappers, and dependencies
+  were unchanged. Source and writer doubles performed all test I/O.
+- No new live device check, InfluxDB upload or query, or Supervisor check was
+  performed. Credential contents were not inspected.
 
-Current HEAD is therefore not a verified release candidate even when its
-working tree is clean.
+The user's existing manual move is unrelated and remains unstaged. The
+settings template's pre-existing trailing whitespace also remains outside this
+change; the scoped whitespace result does not claim the entire historical
+repository is free of whitespace findings.
 
-## Last verified committed baseline - 2026-08-28
+## Operator-confirmed operation - 2026-09-15
 
-The committed baseline used measurement `SAESSIPPower`, flat settings, omitted
-port defaulting to 2527, immediate reconnect/retry, and a hard-coded
-three-failure lifetime threshold.
+The user stated that real data is already uploaded to `seas-sip-power`, and
+subsequently authorized aligning the tests and documentation with that name.
+Both local and remote runtime code already used it. The older name in tests
+and README was stale; the earlier request to decide the measurement is resolved.
 
-Offline results before the later migration/template changes:
+This is operator-provided evidence. The running host, deployed commit,
+Supervisor state, stored point contents, Grafana queries, and any historical
+`SAESSIPPower` series were not independently inspected. No downstream migration
+was needed to preserve the existing runtime name or attempted in this task.
 
-- `uv sync`: passed with CPython 3.11.14; `uv.lock` retained.
-- `uv run pytest -q`: 18 passed.
-- `uv run ruff check .`: passed.
-- All 44 InfluxDB field names, both tag names, measurement, timestamp mapping,
-  and all three CLI flags matched the tests and README.
-- `main.py` contained no function or class definitions.
-- The tracked `imaq-secret` gitlink used the common Sinclair submodule URL;
-  credential contents were not inspected.
+## Historical offline evidence - 2026-08-28
 
-The suite covers direct settings loading, all protocol field groups, truncated
+At baseline `139d9a3`, measurement was `SAESSIPPower`, with flat settings,
+default port 2527, immediate reconnect/retry, and the hard-coded three-failure
+lifetime threshold. `uv sync` passed with CPython 3.11.14, all 18 tests passed,
+and Ruff passed. README and tests matched the then-current schema.
+
+Commit `625cbe5` changed runtime measurement to `seas-sip-power` without updating
+tests and README. The recorded result was 16 passed, 2 failed (the two exact
+measurement assertions), with Ruff passing and trailing whitespace in the
+settings-template host example. Later commits `c4404bb` and `eedb35c` changed
+successful-upload logs and optional-pressure handling; their focused test
+verified `None` retention, omission from line protocol, and the selected log
+values. These historical failures are superseded by the current alignment.
+
+The suite covers direct settings loading, protocol field groups, truncated
 and wrong-header frames, timestamps, record mapping, optional pressure,
 credential isolation, direct read/write behavior, immediate reconnect/retry,
 cumulative lifetime failure handling, cycle-start timing, writer failure, and
 cleanup.
 
-## Last live read-only evidence - 2026-08-28
+## Historical live read-only evidence - 2026-08-28
 
 Environment: Windows host on the controller LAN, endpoint
 `192.168.50.34:2527`, America/Chicago.
@@ -85,11 +80,4 @@ Environment: Windows host on the controller LAN, endpoint
    24.0 V, internal temperature 302 K, and returned IP 192.168.50.34.
 
 No raw response frame was retained, no controller state was changed, no
-credential file was opened, and nothing was uploaded to InfluxDB.
-
-## Not validated
-
-- The current committed measurement/template migration has no live evidence.
-- InfluxDB upload requires explicit authorization and has not been run.
-- Continuous live polling has not been run.
-- Supervisor deployment has not been activated or checked on a selected host.
+credential file was opened, and nothing was uploaded during that check.

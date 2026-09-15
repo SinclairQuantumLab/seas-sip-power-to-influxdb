@@ -1,9 +1,9 @@
 # seas-pump-to-influxdb durable decisions
 
 These are accepted repository decisions, not suggestions from a generic relay
-template. The incomplete migration committed in `625cbe5` is listed separately
-in `.agents/HANDOFF.md`; a commit does not make an unfinished migration a
-verified deployment contract.
+template. The user confirmed the operational measurement on 2026-09-15;
+current work and historical evidence are recorded separately in
+`.agents/HANDOFF.md` and `.agents/VALIDATION.md`.
 
 ## Application shape
 
@@ -38,10 +38,13 @@ verified deployment contract.
 
 ## InfluxDB compatibility
 
-- Last fully verified/deployed-contract measurement: `SAESSIPPower` at
-  `139d9a3`.
-- Current HEAD emits `seas-sip-power` after `625cbe5`, but tests and README have
-  not migrated and no current live/upload evidence exists.
+- Operational measurement: `seas-sip-power`, emitted since `625cbe5` and
+  confirmed by the user as receiving real uploads on 2026-09-15. Tests and
+  README now match it. Preserve this name during maintenance.
+- `SAESSIPPower` belongs to historical baseline `139d9a3`. The earlier
+  handoff's request to resolve the name is superseded by the user's direction.
+  This clarification does not establish which host runs the relay or whether
+  old measurement history exists; no database or dashboard migration was done.
 - Committed tags: `source` and `Serial number`.
 - `main.py` is the only boundary that maps normalized `snake_case` sample
   attributes to exact human-readable InfluxDB field names.
@@ -71,8 +74,5 @@ verified deployment contract.
 
 ## Explicitly unresolved
 
-- The committed `seas-sip-power` measurement migration is incomplete. It
-  conflicts with tests and README until the user confirms and the full migration
-  scope is implemented, or until it is reverted in a later focused commit.
 - The committed settings-template placeholder/comment change is not yet
   reconciled with ignored local `settings.toml` and contains trailing whitespace.
