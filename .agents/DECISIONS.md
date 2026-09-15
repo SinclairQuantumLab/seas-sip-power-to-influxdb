@@ -47,8 +47,10 @@ verified deployment contract.
   attributes to exact human-readable InfluxDB field names.
 - Read All has no source timestamp. The record uses aware UTC acquisition time
   immediately after a valid response arrives.
-- `Pressure[Torr]` is the only optional field and is omitted when conversion
-  rate is zero. `OutputPower[W]` is derived from simultaneous current/voltage.
+- `Pressure[Torr]` is the only optional field. The local record dictionary
+  always includes it; a zero conversion rate maps it to `None`, which the
+  pinned InfluxDB client omits during line-protocol serialization.
+  `OutputPower[W]` is derived from simultaneous current/voltage.
 - Renaming the measurement, tags, fields, types, or timestamp behavior is a
   coordinated InfluxDB/Grafana migration, never a formatting cleanup.
 
@@ -58,6 +60,10 @@ verified deployment contract.
 - Startup wrappers run the prepared `.venv` interpreter and do not resolve
   dependencies during restart.
 - Supervisor owns stdout/stderr logs. No separate local measurement log exists.
+- After a successful upload, stdout summarizes `Pressure[Torr]`,
+  `OutputCurrent[nA]`, and `OutputVoltage[V]` in that order, followed by
+  `and more.`. Unavailable pressure is shown as `None`; dry-run keeps the full
+  record representation for pre-upload review.
 - README uses the concise Sinclair relay installation/usage style established
   in commit `139d9a3`, including the recursive-submodule note and numbered
   installation/usage steps.

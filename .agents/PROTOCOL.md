@@ -52,7 +52,9 @@ number and make the remainder inconsistent.
 The manual states that the conversion rate in A/Torr is useful for calculating
 pressure from output current. The normalized optional pressure is therefore
 `output_current_na * 1e-9 / conversion_rate_a_per_torr` when the reported rate
-is nonzero. A zero conversion rate yields no pressure field.
+is nonzero. A zero conversion rate yields `pressure_torr=None`; the application
+keeps that normalized value in its local record dictionary, and the pinned
+InfluxDB client omits it when serializing line protocol.
 
 ## Current live evidence
 
