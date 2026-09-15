@@ -190,6 +190,8 @@ device check, query stored InfluxDB data, or verify Supervisor deployment.
 - `main.py` owns polling, the fixed InfluxDB schema, upload, failure accounting,
   signals, and cleanup.
 - Protocol details come from
-  `manuals/saes-sip_power-user_manual-rev_4.pdf`. The app sends only the
+  `device-docs/saes-sip_power-user_manual-rev_4.pdf`. The app sends only the
   two-byte Read All request (`01 05`) to the configured unicast address; it does
   not broadcast or send controller write commands.
+- Offline tests live in `.agents/`; run `uv run pytest -q` and
+  `uv run ruff check .` from the repository root.

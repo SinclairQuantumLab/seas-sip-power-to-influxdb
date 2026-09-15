@@ -6,6 +6,26 @@ relay is unused.
 
 ## Current alignment checks - 2026-09-15
 
+### Final workspace and file-layout checks - 2026-09-15
+
+After the user restarted Codex, default shell execution, the Git root, and this
+thread's stored working directory all point to `seas-sip-power-to-influxdb`.
+Origin uses the renamed GitHub repository and the old directory is absent.
+
+The tests moved to `.agents/` are now discovered by the root pytest command;
+their import path and `main.py` location are explicit. The SIP POWER manual
+move preserves its exact bytes, and README/PROTOCOL reference `device-docs/`.
+The user's NEXTorr Z manual and specs are included alongside it.
+
+- `uv run pytest -q`: all 18 tests passed in the actual worktree.
+- `uv run ruff check .`: passed.
+- `uv run python main.py --help`: passed with all three existing CLI flags.
+- The moved environment's pytest launcher initially failed to canonicalize its
+  old script path. `uv sync --reinstall` repaired the installed entry points;
+  `uv venv --allow-existing` regenerated activation scripts, then `uv sync`
+  confirmed the environment. Locked dependency versions are unchanged.
+- No live controller access, InfluxDB upload/query, or Supervisor restart.
+
 ### Repository rename checks - 2026-09-15
 
 The rename changes project metadata, documentation, and Supervisor template

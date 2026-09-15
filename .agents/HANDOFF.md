@@ -17,19 +17,18 @@ that name. The runtime client and InfluxDB measurement remain unchanged.
 The checkout now resides at
 `C:\Users\Joon\Projects\seas-sip-power-to-influxdb`; origin uses the matching
 GitHub URL. Windows prevented renaming the open original directory, so all
-contents were moved into the new directory instead. Only the empty old
-directory and its empty `.git` directory remain. The new checkout, submodule,
-`uv sync`, CLI help, and Ruff were verified after the move.
+contents were moved into the new directory instead. The user deleted the empty
+old directory; its absence is verified.
 
-Codex trusted-project configuration was updated and `codex app` opened the new
-workspace. This active thread still carries its original working directory;
-use the new workspace for subsequent work. No Codex database or conversation
-history was manually rewritten.
+Codex trusted-project configuration and this thread's stored working directory
+and Git origin were updated, with a local database backup. After the user
+restarted Codex, default shell execution, Git root, and stored thread metadata
+all resolve to the new workspace. Conversation history was not rewritten.
 
-The user also moved the two root test files into `.agents/` without changing
-their contents. Those moves are preserved and excluded from the rename commit.
-Plain pytest no longer discovers them, and the moved script test still assumes
-`main.py` is beside it. Completing that test-layout change remains separate work.
+The user's test move into `.agents/` is completed with explicit pytest discovery
+and import paths and a corrected path to root `main.py`. The SIP POWER manual
+now lives under `device-docs/` alongside the user's NEXTorr Z manual and specs.
+README and protocol references use the new location.
 
 The user confirmed on 2026-09-15 that real data is already uploaded to
 `seas-sip-power` and requested alignment of stale tests and documentation.
@@ -66,6 +65,12 @@ in merge `595fd37`. This follow-up changes tests and documentation only:
 
 ## Validation and evidence
 
+At the final rename follow-up, all 18 tests pass directly in this worktree with
+`uv run pytest -q`; Ruff and CLI help also pass. Moving the existing virtual
+environment left stale entry-point paths, fixed with `uv sync --reinstall`.
+`uv venv --allow-existing` regenerated activation scripts for the new path,
+followed by `uv sync`. Dependency versions and runtime behavior are unchanged.
+
 The worktree based on merge `595fd37`, with the aligned tests and documentation,
 passed all 18 tests and Ruff on 2026-09-15. Before the alignment it had 16
 passes and two failures caused by stale measurement expectations.
@@ -79,10 +84,6 @@ See `VALIDATION.md` for details.
 
 ## Existing changes and remaining housekeeping
 
-- The user's unstaged manual move from `manuals/` to `device-docs/` is preserved
-  and excluded from this change. The file content is identical. README and
-  PROTOCOL still reference the committed `manuals/` path; reconcile these when
-  completing the move.
 - `settings.toml.template` has an existing trailing space on its host example.
   Its comment layout differs from ignored local `settings.toml`. These settings
   files were not changed by the measurement-documentation task.

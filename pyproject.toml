@@ -16,6 +16,10 @@ dev = [
 [tool.ruff]
 line-length = 88
 
+[tool.pytest.ini_options]
+testpaths = [".agents"]
+pythonpath = ["."]
+
 [tool.ruff.lint]
 select = [
     "ANN",

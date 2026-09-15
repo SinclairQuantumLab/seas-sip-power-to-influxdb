@@ -9,7 +9,7 @@ or parsing; see `VALIDATION.md` for current evidence boundaries.
 
 ## Sources and acquisition choice
 
-- Primary source: `manuals/saes-sip_power-user_manual-rev_4.pdf`, document
+- Primary source: `device-docs/saes-sip_power-user_manual-rev_4.pdf`, document
   M.HIST.0109.23 Rev. 4, dated September 15, 2022.
 - Relevant manual sections: 9 (remote communication), 9.2 (Ethernet UDP), and
   9.2.3 (Read All Answer), pages 30 and 46-51.

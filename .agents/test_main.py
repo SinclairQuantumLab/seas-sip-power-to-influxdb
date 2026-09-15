@@ -17,7 +17,7 @@ import pytest
 import saes_sip_power_client as source_module
 from saes_sip_power_client import SAESSIPPowerSettings, SourceSample
 
-SCRIPT_PATH = Path(__file__).with_name("main.py")
+SCRIPT_PATH = Path(__file__).resolve().parents[1] / "main.py"
 
 
 def sample(*, pressure_torr: float | None = 1e-9) -> SourceSample:
