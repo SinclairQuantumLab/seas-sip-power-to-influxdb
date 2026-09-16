@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import signal
-import threading
 import time
 import tomllib
 from pathlib import Path
@@ -70,9 +69,9 @@ if not ARGS.dry_run:
 # <<< load IMAQ secret <<<
 
 
-STOP_EVENT = threading.Event()
+# Use Python's normal Ctrl+C exception path for both termination signals.
 for SIGNAL_NUMBER in (signal.SIGINT, signal.SIGTERM):
-    signal.signal(SIGNAL_NUMBER, lambda _signum, _frame: STOP_EVENT.set())
+    signal.signal(SIGNAL_NUMBER, signal.default_int_handler)
 
 
 # >>> InfluxDB configuration >>>
@@ -108,7 +107,7 @@ try:
     print("Entering main polling loop...")
     print()
 
-    while not STOP_EVENT.is_set():
+    while True:
         msg_il = f"Iteration {iteration}: "
 
         try:
@@ -231,7 +230,7 @@ try:
         now = time.monotonic()
         if next_poll <= now:
             next_poll = now + INTERVAL_s
-        STOP_EVENT.wait(next_poll - now)
+        time.sleep(next_poll - now)
 except KeyboardInterrupt:
     log_warn("KeyboardInterrupt received.")
     exit_code = 130

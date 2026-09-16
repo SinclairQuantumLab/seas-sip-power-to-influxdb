@@ -5,7 +5,6 @@ from __future__ import annotations
 import runpy
 import signal
 import sys
-import threading
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -234,40 +233,21 @@ class FakeInfluxClient:
         self.close_count += 1
 
 
-class FakeStopEvent:
-    """Control a continuous script run without real sleeping or signals.
-
-    The fake shares a deterministic monotonic clock, records requested wait
-    durations, advances time by each wait, and reports stopped after a selected
-    count. Tests use it synchronously in place of ``threading.Event``; it owns
-    no resource and retains its timing observations after the script exits.
-    """
+class FakeSleep:
+    """Advance a deterministic clock, then interrupt after the selected waits."""
 
     def __init__(self, clock: list[float], *, stop_after_waits: int) -> None:
-        """Store the shared clock and allowed wait count."""
-
+        """Share one monotonic clock and configure the wait limit."""
         self.clock = clock
         self.stop_after_waits = stop_after_waits
         self.waits: list[float] = []
-        self.requested = False
 
-    def set(self) -> None:
-        """Record an explicit signal-driven stop request."""
-
-        self.requested = True
-
-    def is_set(self) -> bool:
-        """Report an explicit stop or exhausted wait allowance."""
-
-        return self.requested or len(self.waits) >= self.stop_after_waits
-
-    def wait(self, timeout: float | None = None) -> bool:
-        """Record a wait and advance the deterministic clock."""
-
-        assert timeout is not None
-        self.waits.append(timeout)
-        self.clock[0] += timeout
-        return self.is_set()
+    def sleep(self, seconds: float) -> None:
+        """Record elapsed waiting and model Ctrl+C at the final boundary."""
+        self.waits.append(seconds)
+        self.clock[0] += seconds
+        if len(self.waits) >= self.stop_after_waits:
+            raise KeyboardInterrupt
 
 
 def use_fake_source(
@@ -288,12 +268,16 @@ def use_fake_source(
 
 
 def run_script(
-    monkeypatch: pytest.MonkeyPatch, arguments: list[str]
+    monkeypatch: pytest.MonkeyPatch,
+    arguments: list[str],
+    *,
+    signal_handlers: dict | None = None,
 ) -> tuple[int, dict[str, object]]:
     """Execute the production file as a script and capture its exit result."""
 
     monkeypatch.setattr(sys, "argv", [str(SCRIPT_PATH), *arguments])
-    monkeypatch.setattr(signal, "signal", lambda _number, _handler: None)
+    handlers = {} if signal_handlers is None else signal_handlers
+    monkeypatch.setattr(signal, "signal", handlers.__setitem__)
     try:
         namespace: dict[str, object] = runpy.run_path(
             str(SCRIPT_PATH), run_name="__main__"
@@ -523,9 +507,9 @@ def test_lifetime_failure_count_does_not_reset_after_success(
             RuntimeError("cycle four retry"),
         ]
     )
-    stop_event = FakeStopEvent([0.0], stop_after_waits=99)
+    sleeper = FakeSleep([0.0], stop_after_waits=99)
     use_fake_source(monkeypatch, client)
-    monkeypatch.setattr(threading, "Event", lambda: stop_event)
+    monkeypatch.setattr(time, "sleep", sleeper.sleep)
 
     exit_code, _namespace = run_script(
         monkeypatch, ["--settings", str(settings_path), "--dry-run"]
@@ -557,17 +541,17 @@ def test_scheduler_uses_cycle_start_deadlines_and_cleans_up(
         return clock[0]
 
     client = FakeClient([sample(), sample()], on_read=advance_work)
-    stop_event = FakeStopEvent(clock, stop_after_waits=2)
+    sleeper = FakeSleep(clock, stop_after_waits=2)
     use_fake_source(monkeypatch, client)
-    monkeypatch.setattr(threading, "Event", lambda: stop_event)
+    monkeypatch.setattr(time, "sleep", sleeper.sleep)
     monkeypatch.setattr(time, "monotonic", monotonic)
 
     exit_code, _namespace = run_script(
         monkeypatch, ["--settings", str(settings_path), "--dry-run"]
     )
 
-    assert exit_code == 0
-    assert stop_event.waits == [8.0, 7.0]
+    assert exit_code == 130
+    assert sleeper.waits == [8.0, 7.0]
     assert client.close_count == 1
 
 
@@ -601,3 +585,53 @@ def test_write_failure_exits_nonzero_and_closes_every_resource(
     assert source_client.close_count == 1
     assert write_api.close_count == 1
     assert created[0].close_count == 1
+
+
+@pytest.mark.parametrize("signum", [signal.SIGINT, signal.SIGTERM])
+@pytest.mark.parametrize("phase", ["read", "upload", "sleep"])
+def test_termination_interrupts_work_and_closes_resources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    signum: int,
+    phase: str,
+) -> None:
+    """Use the registered handler at I/O boundaries without touching hardware."""
+    settings_path = write_settings(tmp_path)
+    write_auth(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    handlers = {}
+
+    def interrupt(*args: object, **kwargs: object) -> None:
+        """Deliver the selected signal through the production registration."""
+        assert handlers[signum] is signal.default_int_handler
+        handlers[signum](signum, None)
+
+    source_client = FakeClient(
+        [sample()], on_read=interrupt if phase == "read" else None
+    )
+    write_api = FakeWriteAPI()
+    use_fake_source(monkeypatch, source_client)
+    created: list[FakeInfluxClient] = []
+
+    def influx_factory(**options: str) -> FakeInfluxClient:
+        """Retain the client so shutdown can be checked."""
+        client = FakeInfluxClient(write_api, options)
+        created.append(client)
+        return client
+
+    monkeypatch.setattr(influxdb_client, "InfluxDBClient", influx_factory)
+    if phase == "upload":
+        monkeypatch.setattr(write_api, "write", interrupt)
+    monkeypatch.setattr(time, "sleep", interrupt)
+
+    exit_code, _ = run_script(
+        monkeypatch,
+        ["--settings", str(settings_path)],
+        signal_handlers=handlers,
+    )
+
+    assert exit_code == 130
+    assert len(write_api.writes) == (1 if phase == "sleep" else 0)
+    assert source_client.close_count == created[0].close_count == 1
+    assert source_client.connect_count == 1
+    assert write_api.close_count == 1

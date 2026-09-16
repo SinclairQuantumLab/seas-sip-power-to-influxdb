@@ -1,6 +1,6 @@
 # seas-sip-power-to-influxdb handoff
 
-Last updated: 2026-09-15 (America/Chicago).
+Last updated: 2026-09-16 (America/Chicago).
 
 ## Read first
 
@@ -8,6 +8,12 @@ Read root `AGENTS.md`, then `.agents/DECISIONS.md`, `.agents/VALIDATION.md`, and
 `.agents/PROTOCOL.md`. Do not inspect the contents of `imaq-secret`.
 
 ## Current state
+
+The September 16 shutdown update uses `signal.default_int_handler` for SIGINT
+and SIGTERM, replacing the synchronous stop Event. The first signal interrupts
+current work; `finally` closes resources and the relay exits 130. All 24 offline
+tests and Ruff pass. See the dated entry in `VALIDATION.md`; no live operation
+or service restart was performed for this change.
 
 The user requested the repository and local directory name
 `seas-sip-power-to-influxdb` on 2026-09-15 and renamed the GitHub repository.

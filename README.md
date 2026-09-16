@@ -84,6 +84,12 @@ operation fails, the relay replaces the UDP socket immediately and retries
 once. The third unresolved lifetime failure exits the process so Supervisor can
 restart it. Successful cycles do not reset that counter.
 
+`Ctrl+C` (SIGINT) and SIGTERM use Python's `signal.default_int_handler`:
+they interrupt the current read, upload, or sleep through `KeyboardInterrupt`
+and run the existing `finally` cleanup (exit code 130). Shutdown does not wait
+for a complete polling cycle. An interrupted upload may already have reached
+InfluxDB; it is not retried during shutdown.
+
 Stop a foreground process with `Ctrl+C`. The relay closes its UDP and InfluxDB
 clients during normal shutdown and signal handling. Supervisor owns the
 continuous-process stdout and stderr logs. Startup wrappers execute the
