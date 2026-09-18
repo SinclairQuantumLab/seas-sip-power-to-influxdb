@@ -1,6 +1,6 @@
 # seas-sip-power-to-influxdb handoff
 
-Last updated: 2026-09-16 (America/Chicago).
+Last updated: 2026-09-18 (America/Chicago).
 
 ## Read first
 
@@ -8,6 +8,13 @@ Read root `AGENTS.md`, then `.agents/DECISIONS.md`, `.agents/VALIDATION.md`, and
 `.agents/PROTOCOL.md`. Do not inspect the contents of `imaq-secret`.
 
 ## Current state
+
+The shared client now has explicit `start()` and `stop()` methods for HV output.
+`py-seas-sip-power/demo.ipynb` demonstrates connection, readback, Start with ten
+polls, Stop with readback, and close. Install its kernel with
+`uv sync --group notebook`. No live control commands were sent. `main.py` and
+the InfluxDB schema remain unchanged; the relay still only reads the device.
+The new methods have no ACK or retry. Keepalive is documented and unchanged.
 
 The September 16 shutdown update uses `signal.default_int_handler` for SIGINT
 and SIGTERM, replacing the synchronous stop Event. The first signal interrupts

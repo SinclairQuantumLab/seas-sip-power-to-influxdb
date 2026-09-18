@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import struct
+import sys
+import time
 from datetime import UTC, datetime
+from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
+import saes_sip_power_client as source_module
 from saes_sip_power_client import (
     READ_ALL_REQUEST,
     SAESSIPPowerClient,
@@ -227,3 +233,82 @@ def test_client_translates_receive_timeout_without_raw_frame_logging() -> None:
 
     with pytest.raises(SAESSIPPowerCommunicationError, match="Read All failed"):
         client.read_sample()
+
+
+@pytest.mark.parametrize(("method", "command"), [("start", b"\x01\x01"), ("stop", b"\x01\x02")])
+def test_control_sends_once_without_waiting_for_ack(method: str, command: bytes) -> None:
+    """Send the exact command and leave readback explicitly to the caller."""
+
+    fake_socket = FakeSocket([read_all_response()])
+    client = SAESSIPPowerClient(
+        SAESSIPPowerSettings("controller"), socket_factory=lambda: fake_socket
+    )
+    client.connect()
+    getattr(client, method)()
+    assert fake_socket.sent == [command]
+    assert len(fake_socket.responses) == 1
+    assert client.read_sample().enabled is True
+    assert fake_socket.sent == [command, READ_ALL_REQUEST]
+    client.close()
+    assert fake_socket.sent == [command, READ_ALL_REQUEST]
+
+
+@pytest.mark.parametrize("method", ["start", "stop"])
+def test_control_requires_connection(method: str) -> None:
+    """Reject a command when no socket exists."""
+
+    client = SAESSIPPowerClient(SAESSIPPowerSettings("controller"))
+    with pytest.raises(SAESSIPPowerCommunicationError, match="not connected"):
+        getattr(client, method)()
+
+
+@pytest.mark.parametrize("result", [OSError("send failed"), 1])
+def test_control_send_failure_is_not_retried(result: OSError | int) -> None:
+    """Surface failed or incomplete sends without repeating an active command."""
+
+    fake_socket = FakeSocket([])
+    send = Mock(side_effect=result) if isinstance(result, OSError) else Mock(return_value=result)
+    fake_socket.send = send
+    client = SAESSIPPowerClient(
+        SAESSIPPowerSettings("controller"), socket_factory=lambda: fake_socket
+    )
+    client.connect()
+    with pytest.raises(SAESSIPPowerCommunicationError):
+        client.start()
+    send.assert_called_once_with(b"\x01\x01")
+
+
+@pytest.mark.parametrize("from_demo_folder", [False, True])
+def test_demo_notebook_offline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, from_demo_folder: bool
+) -> None:
+    """Execute all demo cells with synthetic settings and a fake UDP socket."""
+
+    notebook = json.loads(
+        (Path(__file__).resolve().parents[1] / "py-seas-sip-power/demo.ipynb")
+        .read_text(encoding="utf-8")
+    )
+    (tmp_path / "settings.toml").write_text(
+        'host = "controller"\ntimeout_s = 3\n', encoding="utf-8"
+    )
+    demo_folder = tmp_path / "py-seas-sip-power"
+    demo_folder.mkdir()
+    monkeypatch.chdir(demo_folder if from_demo_folder else tmp_path)
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.setattr(time, "sleep", lambda _: None)
+    fake_socket = FakeSocket([read_all_response()] * 12)
+    monkeypatch.setattr(
+        source_module, "SAESSIPPowerClient",
+        lambda settings: SAESSIPPowerClient(settings, socket_factory=lambda: fake_socket),
+    )
+    namespace: dict[str, object] = {}
+    for cell in notebook["cells"]:
+        if cell["cell_type"] == "code":
+            assert cell["outputs"] == []
+            exec(compile("".join(cell["source"]), "demo.ipynb", "exec"), namespace)
+    assert fake_socket.sent == (
+        [READ_ALL_REQUEST, b"\x01\x01"]
+        + [READ_ALL_REQUEST] * 10
+        + [b"\x01\x02", READ_ALL_REQUEST]
+    )
+    assert fake_socket.closed

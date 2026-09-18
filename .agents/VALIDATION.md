@@ -136,3 +136,19 @@ protocols, schema, normal scheduling, and ordinary failure policies are unchange
   upload, startup wrapper, service restart, or deployed configuration change was
   performed for this task. Windows service signal delivery is not qualified by
   these in-process handler tests.
+
+
+## 2026-09-18 explicit HV control and notebook
+
+- Baseline `3895a74`: 24 tests and Ruff passed; worktree was clean.
+- Current change: 32 tests and Ruff passed. Added checks cover exact Start/Stop
+  datagrams, absence of ACK reads, explicit readback, no Stop on close,
+  disconnected use, and failed/short sends without automatic retries.
+- All notebook code cells execute offline with a fake socket and synthetic
+  settings from both repository-root and demo-folder working directories.
+  Stored notebook outputs are empty. No input parsing or exception handling
+  was added to the notebook.
+- Optional `notebook` dependency group supplies ipykernel. Production relay
+  dependencies, `main.py`, schema, polling, and recovery behavior are unchanged.
+- No live device commands, InfluxDB access, or service restart was performed.
+  Actual firmware acceptance and HV transitions remain unverified on hardware.

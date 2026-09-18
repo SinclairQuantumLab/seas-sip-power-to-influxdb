@@ -12,6 +12,9 @@ dev = [
     "pytest>=9.0",
     "ruff>=0.15",
 ]
+notebook = [
+    "ipykernel>=7.3.0",
+]
 
 [tool.ruff]
 line-length = 88

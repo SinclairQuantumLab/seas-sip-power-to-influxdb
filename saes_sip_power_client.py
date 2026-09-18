@@ -1,4 +1,4 @@
-"""Read and normalize SAES SIP POWER snapshots over its read-only UDP command."""
+"""Read SAES SIP POWER snapshots and explicitly control its HV output over UDP."""
 
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ from ipaddress import IPv4Address
 from typing import Protocol
 
 DEFAULT_PORT = 2527
+START_REQUEST = bytes((0x01, 0x01))
+STOP_REQUEST = bytes((0x01, 0x02))
 READ_ALL_REQUEST = bytes((0x01, 0x05))
 READ_ALL_RESPONSE_COMMAND = 0x80
 PROTOCOL_VERSION = 0x01
@@ -28,7 +30,7 @@ class SAESSIPPowerError(RuntimeError):
 
 
 class SAESSIPPowerCommunicationError(SAESSIPPowerError):
-    """Report a timeout or operating-system failure during a controller read.
+    """Report a timeout or operating-system failure during controller access.
 
     The client raises this after one socket operation fails and performs no
     retry itself. The owning collector may replace the socket and retry once;
@@ -297,10 +299,11 @@ def parse_read_all_response(
 
 
 class SAESSIPPowerClient:
-    """Own one synchronous, read-only SAES SIP POWER UDP endpoint.
+    """Own one synchronous SAES SIP POWER UDP endpoint.
 
-    The client implements only the vendor's ``Read All`` command (0x05); it
-    cannot start, stop, reset, clear alarms, or change controller settings.
+    ``read_sample`` uses Read All (0x05). Explicit ``start`` and ``stop`` calls
+    switch the pump HV output; they do not switch the controller's input power.
+    No reset, alarm clearing, or parameter writes are implemented.
     ``connect`` creates a connected UDP socket so replies are accepted only from
     the configured controller, and ``read_sample`` returns one fully normalized
     :class:`SourceSample`. The controller supplies no time, so successful reads
@@ -380,8 +383,46 @@ class SAESSIPPowerClient:
             ) from error
         return parse_read_all_response(response)
 
+    def start(self) -> None:
+        """Send Start once to enable HV output, without waiting for an ACK.
+
+        Read back status with ``read_sample`` to check the result. If the
+        controller's keepalive watchdog is enabled, continue polling through
+        this client more frequently than ``keepalive_interval_ms``. Otherwise
+        the controller stops output and raises its communication alarm.
+        """
+
+        self._send_control(START_REQUEST)
+
+    def stop(self) -> None:
+        """Send Stop once to disable HV output; read status to check the result.
+
+        The controller remains powered and reachable. Closing this client
+        alone does not send Stop. Neither command has a UDP acknowledgment.
+        """
+
+        self._send_control(STOP_REQUEST)
+
+    def _send_control(self, request: bytes) -> None:
+        """Send one control datagram without receiving or automatically retrying."""
+
+        udp_socket = self._socket
+        if udp_socket is None:
+            raise SAESSIPPowerCommunicationError("client is not connected")
+        try:
+            sent = udp_socket.send(request)
+        except OSError as error:
+            raise SAESSIPPowerCommunicationError(
+                f"control send failed for {self.settings.host}:"
+                f"{self.settings.port}: {error}"
+            ) from error
+        if sent != len(request):
+            raise SAESSIPPowerCommunicationError(
+                f"incomplete UDP request: sent {sent} of {len(request)} bytes"
+            )
+
     def close(self) -> None:
-        """Release the owned socket idempotently."""
+        """Release the owned socket idempotently without changing HV output."""
 
         udp_socket, self._socket = self._socket, None
         if udp_socket is not None:

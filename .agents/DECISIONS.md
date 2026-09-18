@@ -7,6 +7,12 @@ current work and historical evidence are recorded separately in
 
 ## Application shape
 
+- On 2026-09-18 the user authorized explicit client Start/Stop methods and
+  a minimal demo notebook in `py-seas-sip-power/`. The shared client remains
+  at repository root; the folder contains the demo, not a duplicated package.
+  The notebook has no input validation or exception handling. The relay remains
+  read-only; no control CLI, automatic Stop on close, or keepalive changes.
+
 - `main.py` is intentionally a sequential top-level script. Configuration,
   InfluxDB setup, source connection, polling, record construction, upload,
   recovery, and cleanup should remain readable from top to bottom.

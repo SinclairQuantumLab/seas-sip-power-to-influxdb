@@ -27,8 +27,15 @@ or parsing; see `VALIDATION.md` for current evidence boundaries.
   by the 300-byte payload described in the manual.
 - The client uses a connected UDP socket, which restricts accepted responses to
   the configured controller endpoint.
-- No write/control command is implemented. In particular, the app cannot send
-  Start, Stop, Reset, Clear Alarm, Set Working Parameters, or Set IP Address.
+- The client now exposes Start (`01 01`) and Stop (`01 02`), per Rev. 4
+  section 9.2, page 46. Both control HV output, with no payload or ACK. Callers
+  use Read All afterward to observe enabled state, voltage, and alarms.
+  Commands are sent once; there is no automatic control retry or confirmation.
+- The InfluxDB relay still sends only Read All. Reset, Clear Alarm, Set Working
+  Parameters, and Set IP Address are not implemented.
+- Keepalive is unchanged. After remote Start, poll through the same client
+  within the configured interval or HV stops with a communication alarm
+  (sections 9.2.1 and 9.2.3). Closing the socket does not issue Stop.
 
 ## Read All payload boundaries
 

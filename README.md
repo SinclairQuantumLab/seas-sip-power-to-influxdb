@@ -192,7 +192,15 @@ device check, query stored InfluxDB data, or verify Supervisor deployment.
 ## Developer's note
 
 - `saes_sip_power_client.py` owns the Ethernet connection, Read All protocol,
-  response parsing, and normalized sample.
+  response parsing, and normalized sample. Explicit `start()` and `stop()`
+  methods also control pump HV output; `main.py` never calls them.
+- For an interactive control demo, run `uv sync --group notebook`, open
+  [`py-seas-sip-power/demo.ipynb`](py-seas-sip-power/demo.ipynb), and select
+  this repository's `.venv` kernel. It reads root `settings.toml`. Execute
+  cells individually: connect, read, Start + polling, Stop + read, close.
+  Start/Stop have no acknowledgment; inspect readback to check the result.
+  Keep polling with the same client within the controller's keepalive interval
+  after remote Start. Closing the socket does not send Stop.
 - `main.py` owns polling, the fixed InfluxDB schema, upload, failure accounting,
   signals, and cleanup.
 - Protocol details come from
