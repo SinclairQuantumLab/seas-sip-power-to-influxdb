@@ -188,10 +188,10 @@ The latest recorded read-only device check was on 2026-08-28 against
 `192.168.50.34:2527`: a 302-byte response for serial 25040035 was parsed
 successfully. That check used the former measurement name `SAESSIPPower`.
 
-On 2026-09-18, 16 relay tests and 15 standalone library tests passed, along with
-Ruff and the library package build. The tests cover protocol
-parsing, malformed responses, schema mapping, optional pressure, dry-run
-credential isolation, reconnect and retry, cumulative failure handling,
+At the initial library extraction on 2026-09-18, 16 relay tests and 15 standalone
+library tests passed, along with Ruff and the library package build. The tests
+cover protocol parsing, malformed responses, schema mapping, optional pressure,
+dry-run credential isolation, reconnect and retry, cumulative failure handling,
 timing, and cleanup. This extraction did not perform a new live
 device check, query stored InfluxDB data, or verify Supervisor deployment.
 
@@ -199,24 +199,21 @@ device check, query stored InfluxDB data, or verify Supervisor deployment.
 
 - The independent [`py-seas-sip-power`](https://github.com/SinclairQuantumLab/py-seas-sip-power)
   submodule provides the editable `seas_sip_client` module. It owns the Ethernet
-  protocol, parsing and explicit `start()`/`stop()` methods; `main.py` only reads.
-- For an interactive control demo, enter `py-seas-sip-power`, run
-  `uv sync --group notebook`, open
-  [`py-seas-sip-power/demo.ipynb`](py-seas-sip-power/demo.ipynb), and select
-  the library's `.venv` kernel. It reads the library's local `settings.toml`
-  (copy its template and set the host for a fresh checkout). Execute
-  cells individually: connect, read, Start + polling, Stop + read, close.
-  Start/Stop have no acknowledgment; inspect readback to check the result.
-  Keep polling with the same client within the controller's keepalive interval
-  after remote Start. Closing the socket does not send Stop.
+  protocol, parsing and explicit control methods; `main.py` only reads.
+- For library setup, control APIs and the interactive demo, follow the
+  [library README](py-seas-sip-power/README.md). Its
+  [validation notes](py-seas-sip-power/.agents/VALIDATION.md) track library checks
+  and hardware qualification separately from this relay.
 - `main.py` owns polling, the fixed InfluxDB schema, upload, failure accounting,
   signals, and cleanup.
-- Protocol details come from
-  `py-seas-sip-power/device-docs/saes-sip_power-user_manual-rev_4.pdf`. The app sends only the
-  two-byte Read All request (`01 05`) to the configured unicast address; it does
-  not broadcast or send controller write commands.
+- All device manuals, including the NEXTorr Z manual and specifications, live
+  in the library's [device-docs](py-seas-sip-power/device-docs/). Protocol details
+  come from its SIP POWER Rev. 4 manual. The app sends only the two-byte Read All
+  request (`01 05`) to the configured unicast address; it does not broadcast or
+  send controller write commands.
 - Offline tests live in `.agents/`; run `uv run pytest -q` and
-  `uv run ruff check .` from the repository root.
+  `uv run ruff check .` from the repository root. These checks cover the relay;
+  they exclude the independent library submodule.
 - Run library tests inside its own directory. Publish library commits first,
   then update the submodule checkout, run `uv sync` and relay tests, and commit
   the new gitlink. Editable changes affect this environment before commit;

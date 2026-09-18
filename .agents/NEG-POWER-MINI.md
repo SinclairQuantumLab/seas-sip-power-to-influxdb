@@ -1,5 +1,9 @@
 # NEG POWER MINI feasibility review - 2026-09-15
 
+Historical assessment from before the SIP library extraction. References to
+"this repository" below describe that earlier layout. Current device-library
+ownership is recorded in `DECISIONS.md`; this relay remains SIP-only and read-only.
+
 Scope: compare the user-supplied NEG material with the SIP client. This is an
 assessment, not authorization to implement multi-device acquisition or active
 pump control. No device was contacted and no runtime code was changed.

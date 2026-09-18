@@ -32,6 +32,9 @@ Before editing anything:
   parsing; follow its own AGENTS.md for library work. Commit/push library
   changes before updating this repository's gitlink. Local editable changes
   affect this environment immediately, including before a gitlink update.
+  All device manuals live in its `device-docs/` directory. Library demo
+  instructions and validation belong there; relay pytest and Ruff checks
+  exclude the library, which runs its own checks separately.
 - `main.py` owns CLI parsing, trusted local settings, polling policy, exact
   InfluxDB names, upload, failure accounting, signals, and cleanup. It is a
   sequential top-level script. Do not introduce `main()`, orchestration helper

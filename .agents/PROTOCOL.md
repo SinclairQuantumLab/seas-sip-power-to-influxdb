@@ -6,6 +6,9 @@ independent py-seas-sip-power Git submodule:
 - `py-seas-sip-power/.agents/PROTOCOL.md`
 - `py-seas-sip-power/device-docs/saes-sip_power-user_manual-rev_4.pdf`
 
+The NEXTorr Z manual and specifications also live in that library's
+`device-docs/` directory. There is no relay-level manual directory.
+
 The relay uses only Read All through `seas_sip_client`. It never calls Start,
 Stop, Reset or Clear Alarm. The measurement remains `seas-sip-power` and the
 sample/schema mapping, timestamps, timing and recovery policies are unchanged.

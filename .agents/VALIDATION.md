@@ -168,3 +168,23 @@ protocols, schema, normal scheduling, and ordinary failure policies are unchange
   editable source. The credential submodule was not initialized or read.
 - The built library wheel was installed in an isolated environment and imported
   successfully from site-packages, with Start/Stop bytes 0101/0102.
+
+## 2026-09-18 library separation cleanup
+
+- Both NEXTorr Z PDFs moved by the user match their parent `6acf938` blobs
+  byte-for-byte: manual 403886 bytes, specifications 1564946 bytes. They are
+  published in library commit `b4dc57d`, which adds only those files. The relay
+  removes its old copies and pins that library revision.
+- README delegates library/demo instructions to the library README. Current
+  handoff and ownership notes use the new paths; dated historical records are
+  preserved. Ruff now excludes the independent library, matching pytest's scope.
+- An isolated export of the relay with the cleanup changes and library
+  `b4dc57d` ran `uv sync`, `uv run pytest -q` (16 passed), and
+  `uv run ruff check .` (passed). Ruff's file listing excludes library files.
+  Resolved dependency metadata matches the committed parent lockfile; only
+  checkout line endings differ. No dependencies or versions changed.
+- This isolation avoids testing or resolving dependencies against concurrent
+  uncommitted library API/notebook work. Its unrelated index entries and working
+  files are preserved; this cleanup does not publish those changes.
+- Git whitespace checks passed. No controller access, credential inspection,
+  InfluxDB operation or service restart was performed.

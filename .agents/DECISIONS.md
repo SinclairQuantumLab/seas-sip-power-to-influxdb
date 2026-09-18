@@ -10,7 +10,7 @@ current work and historical evidence are recorded separately in
 - On 2026-09-18 the user authorized explicit client Start/Stop methods, then
   extracted them into the independent public `py-seas-sip-power` library.
   The relay consumes `seas_sip_client` via Git submodule + uv editable source.
-  The notebook has no input validation or exception handling. The relay remains
+  Control API and notebook decisions belong to the library. The relay remains
   read-only; no control CLI, automatic Stop on close, or keepalive changes.
 
 - `main.py` is intentionally a sequential top-level script. Configuration,
@@ -20,8 +20,9 @@ current work and historical evidence are recorded separately in
   application classes, or service frameworks unless explicitly requested.
 - The reusable `SAESSIPPowerClient` class is the appropriate boundary for
   stateful UDP connection and protocol complexity.
-- Device implementation/tests/manual/demo belong to the library; relay schema,
-  polling and application tests stay here. Public class names are unchanged.
+- Device implementation, tests, all manuals and demo belong to the library;
+  relay schema, polling and application tests stay here. Parent pytest and Ruff
+  exclude the independent library; run its checks from its own directory.
 
 ## Settings and credentials
 
