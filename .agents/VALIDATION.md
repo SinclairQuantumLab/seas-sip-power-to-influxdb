@@ -152,3 +152,19 @@ protocols, schema, normal scheduling, and ordinary failure policies are unchange
   dependencies, `main.py`, schema, polling, and recovery behavior are unchanged.
 - No live device commands, InfluxDB access, or service restart was performed.
   Actual firmware acceptance and HV transitions remain unverified on hardware.
+
+## 2026-09-18 standalone source library extraction
+
+- py-seas-sip-power is a separate uv project, Git repository and editable path
+  dependency. The source module is renamed to seas_sip_client, byte-for-byte
+  identical to b18c3a3. Parent main.py changes only its import/grouping.
+- Consumer: 16 tests passed, Ruff passed, CLI help passed.
+- Library: 15 tests passed, Ruff passed, wheel/sdist built. The previous pair of
+  notebook cwd cases is one library-local case, explaining 31 combined tests.
+- The user's executed notebook was backed up locally before adapting imports
+  and settings for the independent library. No live operation was performed.
+- A fresh temporary consumer checkout fetched only the public library submodule,
+  ran uv sync and all 16 relay tests successfully, and imported from that local
+  editable source. The credential submodule was not initialized or read.
+- The built library wheel was installed in an isolated environment and imported
+  successfully from site-packages, with Start/Stop bytes 0101/0102.

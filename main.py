@@ -10,12 +10,12 @@ from pathlib import Path
 
 import influxdb_client
 from influxdb_client.client.write_api import SYNCHRONOUS
-
-from saes_sip_power_client import (
+from seas_sip_client import (
     DEFAULT_PORT,
     SAESSIPPowerClient,
     SAESSIPPowerSettings,
 )
+
 from supervisor.supervisor_helper import log, log_error, log_warn
 
 print()

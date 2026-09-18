@@ -7,9 +7,9 @@ current work and historical evidence are recorded separately in
 
 ## Application shape
 
-- On 2026-09-18 the user authorized explicit client Start/Stop methods and
-  a minimal demo notebook in `py-seas-sip-power/`. The shared client remains
-  at repository root; the folder contains the demo, not a duplicated package.
+- On 2026-09-18 the user authorized explicit client Start/Stop methods, then
+  extracted them into the independent public `py-seas-sip-power` library.
+  The relay consumes `seas_sip_client` via Git submodule + uv editable source.
   The notebook has no input validation or exception handling. The relay remains
   read-only; no control CLI, automatic Stop on close, or keepalive changes.
 
@@ -20,6 +20,8 @@ current work and historical evidence are recorded separately in
   application classes, or service frameworks unless explicitly requested.
 - The reusable `SAESSIPPowerClient` class is the appropriate boundary for
   stateful UDP connection and protocol complexity.
+- Device implementation/tests/manual/demo belong to the library; relay schema,
+  polling and application tests stay here. Public class names are unchanged.
 
 ## Settings and credentials
 

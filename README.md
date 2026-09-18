@@ -7,12 +7,11 @@ controller state or settings.
 
 ## Requirements
 
-- A powered, Ethernet-equipped SAES SIP POWER reachable from the relay computer
-- UDP traffic to the controller's port 2527 permitted by the host and network
+- [uv](https://docs.astral.sh/uv/)
 
 ## Installation
 
-1. Clone the repository and its credential submodule into the standard project
+1. Clone the repository and its submodules into the standard project
    directory:
 
     ```bash
@@ -22,6 +21,9 @@ controller state or settings.
     ```
 
     > **NOTE**: the `--recurse-submodules` option clones [`imaq-secret`](https://github.com/SinclairQuantumLab/imaq-secret.git) repo for the credential to access to our InfluxDB together at the right location in this repo.
+
+    It also checks out the pinned `py-seas-sip-power` device library. `uv sync`
+    installs it as an editable package from that submodule directory.
 
     For an existing checkout cloned without submodules, run:
 
@@ -55,6 +57,9 @@ controller state or settings.
    The InfluxDB measurement remains `seas-sip-power`.
 
 ## Usage
+
+Power the Ethernet-equipped SIP POWER and permit UDP traffic to its port 2527
+between the relay computer and controller.
 
 1. Read and print one real snapshot without loading InfluxDB credentials or
    uploading data:
@@ -183,20 +188,23 @@ The latest recorded read-only device check was on 2026-08-28 against
 `192.168.50.34:2527`: a 302-byte response for serial 25040035 was parsed
 successfully. That check used the former measurement name `SAESSIPPower`.
 
-All 18 offline tests and Ruff passed on 2026-09-15. The tests cover protocol
+On 2026-09-18, 16 relay tests and 15 standalone library tests passed, along with
+Ruff and the library package build. The tests cover protocol
 parsing, malformed responses, schema mapping, optional pressure, dry-run
 credential isolation, reconnect and retry, cumulative failure handling,
-timing, and cleanup. This documentation update did not perform a new live
+timing, and cleanup. This extraction did not perform a new live
 device check, query stored InfluxDB data, or verify Supervisor deployment.
 
 ## Developer's note
 
-- `saes_sip_power_client.py` owns the Ethernet connection, Read All protocol,
-  response parsing, and normalized sample. Explicit `start()` and `stop()`
-  methods also control pump HV output; `main.py` never calls them.
-- For an interactive control demo, run `uv sync --group notebook`, open
+- The independent [`py-seas-sip-power`](https://github.com/SinclairQuantumLab/py-seas-sip-power)
+  submodule provides the editable `seas_sip_client` module. It owns the Ethernet
+  protocol, parsing and explicit `start()`/`stop()` methods; `main.py` only reads.
+- For an interactive control demo, enter `py-seas-sip-power`, run
+  `uv sync --group notebook`, open
   [`py-seas-sip-power/demo.ipynb`](py-seas-sip-power/demo.ipynb), and select
-  this repository's `.venv` kernel. It reads root `settings.toml`. Execute
+  the library's `.venv` kernel. It reads the library's local `settings.toml`
+  (copy its template and set the host for a fresh checkout). Execute
   cells individually: connect, read, Start + polling, Stop + read, close.
   Start/Stop have no acknowledgment; inspect readback to check the result.
   Keep polling with the same client within the controller's keepalive interval
@@ -204,8 +212,12 @@ device check, query stored InfluxDB data, or verify Supervisor deployment.
 - `main.py` owns polling, the fixed InfluxDB schema, upload, failure accounting,
   signals, and cleanup.
 - Protocol details come from
-  `device-docs/saes-sip_power-user_manual-rev_4.pdf`. The app sends only the
+  `py-seas-sip-power/device-docs/saes-sip_power-user_manual-rev_4.pdf`. The app sends only the
   two-byte Read All request (`01 05`) to the configured unicast address; it does
   not broadcast or send controller write commands.
 - Offline tests live in `.agents/`; run `uv run pytest -q` and
   `uv run ruff check .` from the repository root.
+- Run library tests inside its own directory. Publish library commits first,
+  then update the submodule checkout, run `uv sync` and relay tests, and commit
+  the new gitlink. Editable changes affect this environment before commit;
+  use a separate library clone for experiments on a running deployment.

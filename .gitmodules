@@ -1,3 +1,6 @@
 [submodule "imaq-secret"]
 	path = imaq-secret
 	url = https://github.com/SinclairQuantumLab/imaq-secret.git
+[submodule "py-seas-sip-power"]
+	path = py-seas-sip-power
+	url = https://github.com/SinclairQuantumLab/py-seas-sip-power.git

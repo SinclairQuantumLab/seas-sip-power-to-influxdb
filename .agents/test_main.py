@@ -12,9 +12,8 @@ from pathlib import Path
 
 import influxdb_client
 import pytest
-
-import saes_sip_power_client as source_module
-from saes_sip_power_client import SAESSIPPowerSettings, SourceSample
+import seas_sip_client as source_module
+from seas_sip_client import SAESSIPPowerSettings, SourceSample
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "main.py"
 

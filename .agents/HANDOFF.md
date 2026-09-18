@@ -9,12 +9,18 @@ Read root `AGENTS.md`, then `.agents/DECISIONS.md`, `.agents/VALIDATION.md`, and
 
 ## Current state
 
-The shared client now has explicit `start()` and `stop()` methods for HV output.
-`py-seas-sip-power/demo.ipynb` demonstrates connection, readback, Start with ten
-polls, Stop with readback, and close. Install its kernel with
-`uv sync --group notebook`. No live control commands were sent. `main.py` and
-the InfluxDB schema remain unchanged; the relay still only reads the device.
-The new methods have no ACK or retry. Keepalive is documented and unchanged.
+The client is now an independent public library repository, `py-seas-sip-power`,
+checked out here as a Git submodule and installed through a uv editable path.
+Import `seas_sip_client`; public classes and protocol behavior are unchanged.
+Client tests, SIP POWER manual, and demo belong to that repository. Use its
+AGENTS.md and .agents/HANDOFF.md for library development. This relay retains its
+application tests, schema and read-only policy; main.py changed only its import.
+
+The user's executed notebook is preserved in ignored
+`.agents/local/demo-before-library-split.ipynb`; only connection/read cells had
+run. The library demo is output-free and uses its own settings and .venv.
+No live commands were sent during extraction. A later Jupytext conversion is
+recorded in the library AGENTS.md as requested; it is not implemented here.
 
 The September 16 shutdown update uses `signal.default_int_handler` for SIGINT
 and SIGTERM, replacing the synchronous stop Event. The first signal interrupts
@@ -62,8 +68,8 @@ in merge `595fd37`. This follow-up changes tests and documentation only:
 
 ## Runtime summary
 
-- `main.py` remains a direct sequential top-level script; the reusable
-  `saes_sip_power_client.py` owns connected IPv4 UDP Read All and parsing.
+- `main.py` remains a direct sequential top-level script; the library's
+  `seas_sip_client.py` owns connected IPv4 UDP Read All and parsing.
 - One device is polled synchronously. Flat settings are `interval_s`, `host`,
   optional `port` (default 2527), and `timeout_s`.
 - One source failure receives an immediate socket replacement and one retry.
@@ -117,3 +123,11 @@ shows selected missing values as `None`. README provenance is HiCube Neo and
 IQAir (`main`). These are design references, not runtime dependencies. This
 follow-up aligns the target with its user-confirmed behavior and introduces
 no new family convention.
+
+## Separate library development
+
+The Codex project `py-seas-sip-power` and thread `Developing py-seas-sip-power`
+were created at the submodule root. A read-only takeover turn completed and
+confirmed the control constraints and deferred Jupytext task. That thread
+made no file changes and contacted no hardware. Thread identifiers are kept
+locally in ignored `.agents/local/library-thread.json`.

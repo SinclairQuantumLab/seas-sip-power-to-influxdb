@@ -27,8 +27,11 @@ Before editing anything:
 
 ## File ownership
 
-- `saes_sip_power_client.py` owns connection lifecycle, UDP framing, protocol
-  validation, parsing, and normalized `snake_case` samples.
+- `py-seas-sip-power/` is an independent library Git submodule, installed as a
+  uv editable dependency. Its `seas_sip_client.py` owns protocol access and
+  parsing; follow its own AGENTS.md for library work. Commit/push library
+  changes before updating this repository's gitlink. Local editable changes
+  affect this environment immediately, including before a gitlink update.
 - `main.py` owns CLI parsing, trusted local settings, polling policy, exact
   InfluxDB names, upload, failure accounting, signals, and cleanup. It is a
   sequential top-level script. Do not introduce `main()`, orchestration helper

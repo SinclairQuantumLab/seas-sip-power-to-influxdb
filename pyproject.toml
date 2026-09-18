@@ -5,15 +5,13 @@ description = "Read-only SAES SIP POWER snapshot relay to InfluxDB"
 requires-python = ">=3.11"
 dependencies = [
     "influxdb-client>=1.50.0",
+    "py-seas-sip-power",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=9.0",
     "ruff>=0.15",
-]
-notebook = [
-    "ipykernel>=7.3.0",
 ]
 
 [tool.ruff]
@@ -41,3 +39,6 @@ select = [
     "I",
     "UP",
 ]
+
+[tool.uv.sources]
+py-seas-sip-power = { path = "py-seas-sip-power", editable = true }
