@@ -68,13 +68,20 @@ version = "0.1.0"
 source = { editable = "py-seas-sip-power" }
 
 [package.metadata]
+requires-dist = [{ name = "pyserial", marker = "extra == 'serial'", specifier = ">=3.5" }]
+provides-extras = ["serial"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "ipykernel", specifier = ">=7.3.0" },
+    { name = "jupytext", specifier = ">=1.18" },
     { name = "pytest", specifier = ">=9.0" },
     { name = "ruff", specifier = ">=0.15" },
 ]
-notebook = [{ name = "ipykernel", specifier = ">=7.3.0" }]
+notebook = [
+    { name = "ipykernel", specifier = ">=7.3.0" },
+    { name = "jupytext", specifier = ">=1.18" },
+]
 
 [[package]]
 name = "pygments"

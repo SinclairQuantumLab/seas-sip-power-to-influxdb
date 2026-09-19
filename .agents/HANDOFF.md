@@ -18,9 +18,8 @@ Read root `AGENTS.md`, then `.agents/DECISIONS.md`, `.agents/VALIDATION.md`, and
   `.agents/HANDOFF.md` for library work.
 - All manuals are now in `py-seas-sip-power/device-docs/`. The user's NEXTorr Z
   manual/specifications move was verified byte-for-byte against the parent Git
-  baseline. Library commit `b4dc57d` contains only those two additions and is
-  published before this relay's gitlink update. The old relay-level
-  `device-docs/` directory is gone.
+  baseline. Published library commit `b4dc57d` contains only those two additions.
+  The old relay-level `device-docs/` directory is gone.
 - `main.py`, application tests, schema, polling and upload policy remain here.
   Parent pytest and Ruff checks exclude the library. Its README owns demo setup
   and usage instructions; avoid duplicating those instructions in this repo.
@@ -28,14 +27,35 @@ Read root `AGENTS.md`, then `.agents/DECISIONS.md`, `.agents/VALIDATION.md`, and
   directory. Its local identifiers are in ignored
   `.agents/local/library-thread.json`.
 
-## Library work in progress
+## Latest library review and next step
 
-At cleanup time the library worktree contains separate staged/unstaged changes
-for Jupytext, access modes and the expanded remote interface. This cleanup
-preserves those changes. Consult the library's current handoff for their status;
-the relay's recorded gitlink, rather than a dirty editable checkout, defines
-the reproducible dependency version. Publish intended library changes before
-updating that gitlink and validate the relay against the selected revision.
+The user requested a commit checkpoint and review before adapting this relay.
+Library implementation `95bc12b` and handoff `a1c1d1f` are committed, clean and
+published; origin/main was fetched and matched `a1c1d1f` at review time. Parent
+checkpoint `a8bdc77` pins that revision. `uv sync` refreshes only the library's
+optional/development metadata in the parent lockfile; it adds no runtime package.
+
+The library now provides `SAESSIPPower(ConnectionSettings(...))`, selected with
+`ConnectionTypeEnum`, returning `DeviceStatus`. It supports UDP, Modbus TCP/RTU,
+explicit enum-controlled read/write access, the full remote command interface
+and a Jupytext demo. Its AGENTS.md has a dedicated consumer integration section.
+The current relay still uses the compatible `SAESSIPPowerClient` and
+`SAESSIPPowerSettings`; its source and application tests have not been migrated.
+
+Recommended next implementation: adopt the common device API with explicit
+`ConnectionTypeEnum.UDP` and `AccessModeEnum.READ_ONLY`, retaining flat settings,
+one `read_sample()` per acquisition, lifecycle/retry behavior and the exact
+InfluxDB mapping. Update test constructors/fixtures and cover read-only access
+and the real UDP-to-record boundary. No adapter/service layer is needed.
+
+Keep transport expansion a separate decision: Modbus cannot observe Modbus ID,
+may lack network/keepalive fields, and uses four or five reads per snapshot.
+That affects field presence and acquisition/timeout semantics despite the common
+Python interface. Never substitute configured values for missing observations.
+The `status` property performs I/O each time; cache a returned snapshot locally
+when building a record. The new `is_single_response` metadata is not an InfluxDB
+field in the current schema. Control or broadcast support in the library does
+not change this relay's read-only scope.
 
 The operator's pre-extraction notebook is preserved in ignored
 `.agents/local/demo-before-library-split.ipynb`. Library notebook migration and
@@ -60,22 +80,26 @@ output preservation are managed in its own repository.
 ## Evidence and remaining work
 
 See the dated entries in `VALIDATION.md` for extraction and cleanup checks.
-Cleanup passed all 16 relay tests and Ruff in an isolated checkout using library
-`b4dc57d`, without consuming the concurrent library development changes.
+Current review: 16 relay tests, 299 library tests and both Ruff checks pass
+against `a1c1d1f`. A fake-socket comparison also preserves all 44 relay field
+values/types and identity through the common UDP API, including missing pressure.
 Historical test counts describe their corresponding revisions, not the current
 suite. The last agent-recorded live read was on 2026-08-28; the user's
 2026-09-15 upload confirmation is separate operator evidence. This cleanup
-performs no hardware access, InfluxDB query/upload or service restart.
+and the current review perform no hardware access, InfluxDB query/upload or
+service restart. Parent checkpoint/review commits are local pending the next
+consumer-development step; no parent push was requested in this review.
 
 The settings template's pre-existing trailing whitespace and comment-layout
 difference from local settings are unrelated to the library split and remain.
 
 ## Reference provenance
 
-This cleanup follows the ownership boundary established by extraction commit
-`6acf938`; it introduces no new runtime convention. The skill-source preflight
-reported `current-dirty`, ahead 0 / behind 0 of
-`origin/feature/to-influxdb-development`; existing skill changes were preserved.
+The review compares this relay's `9d0c13b` baseline and library
+`b4dc57d..a1c1d1f`, both on `main`; it introduces no new family convention.
+The skill-source preflight reported `skipped-diverged`, ahead 106 / behind 106 of
+`origin/feature/to-influxdb-development`. No skill history repair or edit was
+attempted. This is a source-freshness limitation, not a consumer-library failure.
 The refreshed organization inventory has 15 nonempty, unarchived relay
 repositories (LFI3751 uses `master`, the others `main`). Earlier comparative
 evidence remains in `TAKEOVER-2026-09-15.md` and the skill's repository corpus.

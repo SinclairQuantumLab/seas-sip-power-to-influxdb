@@ -188,3 +188,32 @@ protocols, schema, normal scheduling, and ordinary failure policies are unchange
   files are preserved; this cleanup does not publish those changes.
 - Git whitespace checks passed. No controller access, credential inspection,
   InfluxDB operation or service restart was performed.
+
+## 2026-09-18 unified library consumer review
+
+- The user requested committing the existing state, then reviewing adaptation.
+  Library `a1c1d1f` is clean and matches fetched origin/main. Parent `a8bdc77`
+  checkpoints the gitlink update from `b4dc57d`; application source is unchanged.
+- Parent `uv sync` succeeded. Its lockfile records the library's new optional
+  serial extra and notebook/development metadata; the resolved package set and
+  versions are unchanged. No notebook or serial dependency was added to relay
+  runtime requirements.
+- Current checkout: `uv run pytest -q` passed 16 relay tests; `uv run ruff check .`
+  passed. Separately inside the library, the same commands passed 299 tests and
+  Ruff. These are current offline checks, not inherited validation claims.
+- An AST comparison confirms `SourceSample` and `parse_read_all_response` are
+  unchanged from library `b4dc57d`. Existing unicast UDP acquisition still uses
+  the same parser. Lifecycle calls do not introduce device write commands.
+- A one-off fake-socket probe exercised the real common `SAESSIPPower` UDP API
+  and evaluated the actual `main.py` field mapping on its `DeviceStatus`. With
+  conversion rates 20 and 0, all 44 fields retain exact values and Python types;
+  device identity and aware UTC timestamp semantics are preserved. Each case
+  sent one `01 05` request, no lifecycle commands, and closed both the original
+  and reconnect sockets. This probe makes no production API migration.
+- Review found no blocker for the existing read-only UDP consumer. Common API
+  adoption is a proposed next change. Modbus field availability and multi-read
+  timing require a separate consumer design decision; its hardware behavior and
+  new control paths are not qualified by this review.
+- No device access, credential inspection, InfluxDB operation, notebook execution
+  or deployment change occurred. Parent publication is deferred during this
+  review checkpoint; the library revision itself is already published.
