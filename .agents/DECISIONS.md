@@ -18,8 +18,13 @@ current work and historical evidence are recorded separately in
   recovery, and cleanup should remain readable from top to bottom.
 - Do not introduce `main()`, settings/auth loaders, record-builder helpers,
   application classes, or service frameworks unless explicitly requested.
-- The reusable `SAESSIPPowerClient` class is the appropriate boundary for
-  stateful UDP connection and protocol complexity.
+- On 2026-09-18 the user authorized adopting the library's common `SAESSIPPower`
+  API and explicitly confirmed read-only access for the logger. Construct it
+  with `ConnectionSettings`, `ConnectionTypeEnum.UDP` and
+  `AccessModeEnum.READ_ONLY`; the library owns connection/protocol complexity.
+  One `DeviceStatus` supplies each record. Preserve all 44 fields and their
+  types; `is_single_response` is library metadata, not a new InfluxDB field.
+  Modbus selection and controller writes are outside this migration.
 - Device implementation, tests, all manuals and demo belong to the library;
   relay schema, polling and application tests stay here. Parent pytest and Ruff
   exclude the independent library; run its checks from its own directory.

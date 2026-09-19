@@ -12,8 +12,10 @@ import influxdb_client
 from influxdb_client.client.write_api import SYNCHRONOUS
 from seas_sip_client import (
     DEFAULT_PORT,
-    SAESSIPPowerClient,
-    SAESSIPPowerSettings,
+    AccessModeEnum,
+    ConnectionSettings,
+    ConnectionTypeEnum,
+    SAESSIPPower,
 )
 
 from supervisor.supervisor_helper import log, log_error, log_warn
@@ -40,8 +42,9 @@ with SETTINGS_PATH.open("rb") as f:
     SETTINGS = tomllib.load(f)
 
 INTERVAL_s = SETTINGS["interval_s"]
-SOURCE_SETTINGS = SAESSIPPowerSettings(
-    host=SETTINGS["host"],
+SOURCE_SETTINGS = ConnectionSettings(
+    address=SETTINGS["host"],
+    connection_type=ConnectionTypeEnum.UDP,
     port=SETTINGS.get("port", DEFAULT_PORT),
     timeout_s=SETTINGS["timeout_s"],
 )
@@ -53,7 +56,7 @@ print(
 )
 print(
     f"SAES SIP POWER controller = "
-    f"{SOURCE_SETTINGS.host}:{SOURCE_SETTINGS.port}."
+    f"{SOURCE_SETTINGS.address}:{SOURCE_SETTINGS.port}."
 )
 print(f"Settings file = {SETTINGS_PATH}.")
 print(f"InfluxDB upload = {'disabled (dry-run)' if ARGS.dry_run else 'enabled'}.")
@@ -94,7 +97,9 @@ if not ARGS.dry_run:
 
 
 # >>> SAES SIP POWER connection >>>
-SIP_POWER_CLIENT = SAESSIPPowerClient(SOURCE_SETTINGS)
+SIP_POWER_CLIENT = SAESSIPPower(
+    SOURCE_SETTINGS, access_mode=AccessModeEnum.READ_ONLY
+)
 # <<< SAES SIP POWER connection <<<
 
 

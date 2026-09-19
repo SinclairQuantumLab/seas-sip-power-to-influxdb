@@ -13,15 +13,67 @@ from pathlib import Path
 import influxdb_client
 import pytest
 import seas_sip_client as source_module
-from seas_sip_client import SAESSIPPowerSettings, SourceSample
+from seas_sip_client import (
+    AccessModeEnum,
+    ConnectionSettings,
+    ConnectionTypeEnum,
+    DeviceStatus,
+)
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "main.py"
 
+EXPECTED_FIELDS = {
+    "HasEthernet": True,
+    "HasDisplay": True,
+    "HardwareRevision": "1.2",
+    "SoftwareVersion": "3.4",
+    "OutputCurrent[nA]": 20,
+    "OutputVoltage[V]": 5000,
+    "InputVoltage[V]": 24.0,
+    "InternalTemperature[K]": 300,
+    "ArcingEvents": 2,
+    "TotalWorkingTime[h]": 100,
+    "Uptime[s]": 200,
+    "Enabled": True,
+    "NeedRestart": False,
+    "OutputCurrentGradient": "HOLD",
+    "GlobalAlarm": False,
+    "SafeAlarm": False,
+    "InterlockAlarm": False,
+    "OverTemperatureAlarm": False,
+    "InputVoltageAlarm": False,
+    "OutputOverVoltageAlarm": False,
+    "OutputOverCurrentAlarm": False,
+    "ArcingAlarm": False,
+    "CommunicationAlarm": False,
+    "Switch1On": True,
+    "Switch2On": False,
+    "Switch3On": True,
+    "OutputVoltageSetpoint[V]": 5000,
+    "OutputVoltageRampInterval[ms]": 1000,
+    "Switch1Mode": "SIMPLE",
+    "Switch2Mode": "WINDOW",
+    "Switch3Mode": "OFF",
+    "Switch1Threshold[nA]": 1,
+    "Switch2MinThreshold[nA]": 2,
+    "Switch2MaxThreshold[nA]": 3,
+    "Switch3MinThreshold[nA]": 4,
+    "Switch3MaxThreshold[nA]": 5,
+    "KeepaliveInterval[ms]": 0,
+    "ConversionRate[A/Torr]": 20,
+    "ModbusID": 11,
+    "IPAddress": "192.168.50.34",
+    "IPNetmask": "255.255.255.0",
+    "MACAddress": "00:11:22:AA:BB:CC",
+    "OutputPower[W]": 0.0001,
+    "Pressure[Torr]": 1e-9,
+}
 
-def sample(*, pressure_torr: float | None = 1e-9) -> SourceSample:
+
+def sample(*, pressure_torr: float | None = 1e-9) -> DeviceStatus:
     """Build one deterministic normalized controller snapshot."""
 
-    return SourceSample(
+    return DeviceStatus(
         observed_at=datetime(2026, 8, 28, 12, 0, tzinfo=UTC),
         serial_number=123456,
         has_ethernet=True,
@@ -121,7 +173,7 @@ class FakeClient:
 
     def __init__(
         self,
-        outcomes: list[SourceSample | Exception],
+        outcomes: list[DeviceStatus | Exception],
         *,
         on_read: Callable[[], None] | None = None,
     ) -> None:
@@ -152,7 +204,7 @@ class FakeClient:
         self.connected = True
         self.reconnect_count += 1
 
-    def read_sample(self) -> SourceSample:
+    def read_sample(self) -> DeviceStatus:
         """Return or raise the next queued source outcome."""
 
         if self.on_read is not None:
@@ -251,18 +303,22 @@ class FakeSleep:
 
 def use_fake_source(
     monkeypatch: pytest.MonkeyPatch, client: FakeClient
-) -> list[SAESSIPPowerSettings]:
+) -> list[ConnectionSettings]:
     """Replace source construction and return captured typed settings."""
 
-    captured: list[SAESSIPPowerSettings] = []
+    captured: list[ConnectionSettings] = []
 
-    def source_factory(settings: SAESSIPPowerSettings) -> FakeClient:
-        """Capture source settings and return the selected fake client."""
+    def source_factory(
+        settings: ConnectionSettings, *, access_mode: AccessModeEnum
+    ) -> FakeClient:
+        """Require explicit read-only UDP access and capture connection settings."""
 
+        assert access_mode is AccessModeEnum.READ_ONLY
+        assert settings.connection_type is ConnectionTypeEnum.UDP
         captured.append(settings)
         return client
 
-    monkeypatch.setattr(source_module, "SAESSIPPowerClient", source_factory)
+    monkeypatch.setattr(source_module, "SAESSIPPower", source_factory)
     return captured
 
 
@@ -345,12 +401,8 @@ def test_direct_script_maps_complete_schema(
         "Serial number": "123456",
     }
     assert isinstance(fields, dict)
-    assert fields["OutputCurrent[nA]"] == 20
-    assert fields["InputVoltage[V]"] == 24.0
-    assert fields["Enabled"] is True
-    assert fields["Switch2Mode"] == "WINDOW"
-    assert fields["IPAddress"] == "192.168.50.34"
-    assert fields["Pressure[Torr]"] == 1e-9
+    assert fields == EXPECTED_FIELDS
+    assert all(type(fields[key]) is type(value) for key, value in EXPECTED_FIELDS.items())
     assert record["time"] == sample().observed_at
     assert source_client.close_count == 1
     assert write_api.close_count == 1
@@ -399,12 +451,13 @@ def test_direct_script_keeps_unavailable_pressure_as_none_in_record(
     assert "HasEthernet" not in output
 
 
+@pytest.mark.parametrize("port", [None, 2528])
 def test_direct_script_loads_settings(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, port: int | None
 ) -> None:
     """Load the local settings directly and construct the source client."""
 
-    settings_path = write_settings(tmp_path, interval_s=30)
+    settings_path = write_settings(tmp_path, interval_s=30, port=port)
     captured = use_fake_source(monkeypatch, FakeClient([sample()]))
 
     exit_code, namespace = run_script(
@@ -413,7 +466,14 @@ def test_direct_script_loads_settings(
     )
 
     assert exit_code == 0
-    assert captured == [SAESSIPPowerSettings("192.168.50.34", 2527, 3.0)]
+    assert captured == [
+        ConnectionSettings(
+            "192.168.50.34",
+            connection_type=ConnectionTypeEnum.UDP,
+            port=2527 if port is None else port,
+            timeout_s=3.0,
+        )
+    ]
     assert namespace["INTERVAL_s"] == 30
     assert namespace["MEASUREMENT"] == "seas-sip-power"
     assert namespace["EX_THRESHOLD"] == 3

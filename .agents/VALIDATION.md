@@ -217,3 +217,29 @@ protocols, schema, normal scheduling, and ordinary failure policies are unchange
 - No device access, credential inspection, InfluxDB operation, notebook execution
   or deployment change occurred. Parent publication is deferred during this
   review checkpoint; the library revision itself is already published.
+
+## 2026-09-18 unified UDP API migration
+
+- Starting parent `e8c81cc` and library `a1c1d1f` were clean. The user authorized
+  the reviewed migration and explicitly reconfirmed read-only device access.
+- `main.py` now constructs `SAESSIPPower(ConnectionSettings(...))` with explicit
+  UDP and READ_ONLY enums. Flat settings, default/custom ports, all 44 fields,
+  tags, measurement, timestamps, timing, retries and shutdown are preserved.
+- `uv run pytest -q`: 21 passed. `uv run ruff check .`: passed. Existing tests
+  now use the common API/sample types and require explicit read-only selection;
+  settings tests cover both omitted and custom ports.
+- Four new integration cases exercise the actual library and relay over fake
+  UDP sockets, crossing pressure available/unavailable with immediate success
+  or one timed-out read before reconnect. They compare every record field and
+  its exact Python type, check identity and aware UTC acquisition timestamps,
+  pressure omission in line protocol, read-only mode after reconnect, denied
+  control, only `01 05` datagrams, and socket/writer cleanup.
+- Library source, its gitlink, settings files, dependency lock, startup wrappers
+  and Supervisor configuration are unchanged. Its 299-test result remains dated
+  evidence from the preceding review; no library suite rerun was needed here.
+- The acquisition/mapping/retry/shutdown block's AST is identical to the parent
+  baseline. README's schema table matches the exact 44 field names in main.py.
+  Git whitespace checks passed.
+- All network/upload boundaries in tests are synthetic. No actual controller
+  connection, credentials, InfluxDB access, notebook execution or deployment
+  operation was part of this migration.

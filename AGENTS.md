@@ -57,6 +57,10 @@ Before editing anything:
 Unless the user explicitly requests a migration:
 
 - One controller is polled synchronously through read-only UDP Read All.
+  Construct the library's `SAESSIPPower` with `ConnectionSettings`, explicit
+  `ConnectionTypeEnum.UDP` and `AccessModeEnum.READ_ONLY`. Read one `DeviceStatus`
+  per acquisition and reuse it for the record; the `status` property performs
+  fresh I/O on every access. Modbus and controller writes are outside relay scope.
 - Settings are flat: `interval_s`, `host`, optional `port`, and `timeout_s`.
   Omitted `port` uses `DEFAULT_PORT` 2527. Do not add a `[source]` section,
   configurable measurement, reconnect delay, or exception-threshold setting.

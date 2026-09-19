@@ -195,11 +195,20 @@ dry-run credential isolation, reconnect and retry, cumulative failure handling,
 timing, and cleanup. This extraction did not perform a new live
 device check, query stored InfluxDB data, or verify Supervisor deployment.
 
+The unified library API migration on 2026-09-18 passed 21 relay tests and Ruff.
+Fake UDP responses exercise the real client through record construction,
+including all 44 field values/types, unavailable pressure, timeout/reconnect,
+read-only access and cleanup. No new live device or deployment check was run.
+
 ## Developer's note
 
 - The independent [`py-seas-sip-power`](https://github.com/SinclairQuantumLab/py-seas-sip-power)
   submodule provides the editable `seas_sip_client` module. It owns the Ethernet
   protocol, parsing and explicit control methods; `main.py` only reads.
+- The relay constructs `SAESSIPPower` with `ConnectionSettings`, explicit
+  `ConnectionTypeEnum.UDP` and `AccessModeEnum.READ_ONLY`. Each acquisition uses
+  one `read_sample()` result (`DeviceStatus`) for the complete record. Library
+  transport options and control methods do not add relay settings or CLI flags.
 - For library setup, control APIs and the interactive demo, follow the
   [library README](py-seas-sip-power/README.md). Its
   [validation notes](py-seas-sip-power/.agents/VALIDATION.md) track library checks

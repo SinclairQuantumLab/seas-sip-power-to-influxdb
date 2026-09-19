@@ -9,7 +9,11 @@ independent py-seas-sip-power Git submodule:
 The NEXTorr Z manual and specifications also live in that library's
 `device-docs/` directory. There is no relay-level manual directory.
 
-The relay uses only Read All through `seas_sip_client`. It never calls Start,
+The relay uses `SAESSIPPower(ConnectionSettings(...))` through `seas_sip_client`,
+with explicit `ConnectionTypeEnum.UDP` and `AccessModeEnum.READ_ONLY`. Each
+`read_sample()` returns one `DeviceStatus` from the same UDP Read All parser.
+Reconnect preserves that access mode and never issues a controller write.
+The relay never calls Start,
 Stop, Reset or Clear Alarm. The measurement remains `seas-sip-power` and the
 sample/schema mapping, timestamps, timing and recovery policies are unchanged.
 See VALIDATION.md for application evidence; library evidence belongs to the

@@ -27,9 +27,10 @@ Read root `AGENTS.md`, then `.agents/DECISIONS.md`, `.agents/VALIDATION.md`, and
   directory. Its local identifiers are in ignored
   `.agents/local/library-thread.json`.
 
-## Latest library review and next step
+## Unified API migration
 
-The user requested a commit checkpoint and review before adapting this relay.
+The user requested a commit checkpoint and review, then authorized implementation
+and explicitly confirmed read-only access for the logger.
 Library implementation `95bc12b` and handoff `a1c1d1f` are committed, clean and
 published; origin/main was fetched and matched `a1c1d1f` at review time. Parent
 checkpoint `a8bdc77` pins that revision. `uv sync` refreshes only the library's
@@ -39,14 +40,18 @@ The library now provides `SAESSIPPower(ConnectionSettings(...))`, selected with
 `ConnectionTypeEnum`, returning `DeviceStatus`. It supports UDP, Modbus TCP/RTU,
 explicit enum-controlled read/write access, the full remote command interface
 and a Jupytext demo. Its AGENTS.md has a dedicated consumer integration section.
-The current relay still uses the compatible `SAESSIPPowerClient` and
-`SAESSIPPowerSettings`; its source and application tests have not been migrated.
+The relay now constructs this common API with explicit `ConnectionTypeEnum.UDP`
+and `AccessModeEnum.READ_ONLY`, retaining flat settings, one `read_sample()` per
+acquisition, lifecycle/retry behavior and the exact InfluxDB mapping. The source
+log reads `ConnectionSettings.address`; the deployer's key remains `host`.
+There is no adapter/service layer or transport-selection setting.
 
-Recommended next implementation: adopt the common device API with explicit
-`ConnectionTypeEnum.UDP` and `AccessModeEnum.READ_ONLY`, retaining flat settings,
-one `read_sample()` per acquisition, lifecycle/retry behavior and the exact
-InfluxDB mapping. Update test constructors/fixtures and cover read-only access
-and the real UDP-to-record boundary. No adapter/service layer is needed.
+Application tests now use `DeviceStatus` and require explicit read-only UDP
+construction. The new `test_udp_integration.py` drives the real library through
+fake sockets and captures fake InfluxDB writes. It covers all 44 field names,
+values and types, pressure omission, a timeout/reconnect, read-only enforcement,
+Read All-only datagrams and cleanup. No implementation work remains from this
+UDP migration request.
 
 Keep transport expansion a separate decision: Modbus cannot observe Modbus ID,
 may lack network/keepalive fields, and uses four or five reads per snapshot.
@@ -80,23 +85,22 @@ output preservation are managed in its own repository.
 ## Evidence and remaining work
 
 See the dated entries in `VALIDATION.md` for extraction and cleanup checks.
-Current review: 16 relay tests, 299 library tests and both Ruff checks pass
-against `a1c1d1f`. A fake-socket comparison also preserves all 44 relay field
-values/types and identity through the common UDP API, including missing pressure.
+Current migration: 21 relay tests and Ruff pass against library `a1c1d1f`.
+The preceding review separately passed 299 library tests and library Ruff; the
+library is unchanged by this migration, so its suite was not rerun.
 Historical test counts describe their corresponding revisions, not the current
 suite. The last agent-recorded live read was on 2026-08-28; the user's
-2026-09-15 upload confirmation is separate operator evidence. This cleanup
-and the current review perform no hardware access, InfluxDB query/upload or
-service restart. Parent checkpoint/review commits are local pending the next
-consumer-development step; no parent push was requested in this review.
+2026-09-15 upload confirmation is separate operator evidence. This migration
+performs no hardware access, InfluxDB query/upload or service restart.
 
 The settings template's pre-existing trailing whitespace and comment-layout
 difference from local settings are unrelated to the library split and remain.
 
 ## Reference provenance
 
-The review compares this relay's `9d0c13b` baseline and library
-`b4dc57d..a1c1d1f`, both on `main`; it introduces no new family convention.
+The review compared this relay's `9d0c13b` baseline and library
+`b4dc57d..a1c1d1f`, both on `main`. Implementation starts from parent `e8c81cc`
+and follows that reviewed API boundary; it introduces no new family convention.
 The skill-source preflight reported `skipped-diverged`, ahead 106 / behind 106 of
 `origin/feature/to-influxdb-development`. No skill history repair or edit was
 attempted. This is a source-freshness limitation, not a consumer-library failure.
